@@ -1,0 +1,2404 @@
+  <!DOCTYPE html>
+<html>
+<head>
+	<title>Bubbles</title>
+	<!-- include p5js -->
+	<script src="https://cdn.jsdelivr.net/npm/p5@1.1.9/lib/p5.js"></script>
+</head>
+<body>
+</body>
+</html>
+<script type="text/javascript">
+
+	//properties
+	let gameMode = 'creative';
+  let gameOver = false;
+	let block_size = 20; //block size in px
+	let currentChunk = 0;
+	let chunks = {};
+	var player_x;
+	var player_y;
+  let playerHealth = 10;
+  let playerMaxHealth = 10;
+	let player_vy = 0;
+	var generatedClouds;
+	var skyColor;
+	let interactionRange = 4*block_size;
+	let items = {};
+	let chunkItmes = {};
+	let nextItemID = 0;
+	let inventory = [[0,0],[0,0],[0,0],[0,0],[0,0],[0,0],[0,0],[0,0],[0,0],[0,0],[0,0],[0,0],[0,0],[0,0],[0,0],[0,0],[0,0],[0,0],[0,0],[0,0],[0,0],[0,0],[0,0],[0,0],[0,0],[0,0],[0,0],[0,0]];
+	let boxWidth = 50;
+	let ore = {};
+	let oreTypes = {};
+	let chunkOre = {};
+	let selectedDragItem = -1;
+	let currentInventorySpot = 0;
+	let inventoryIsOpen = false;
+	let passableBlocks = [ 'air', 'grass', 'wood', 'leaf', "water"];
+	let moveableBlocks = [ 'air', 'wood', 'leaf', "water"];
+	let gravityBlocks = ['grass', 'dirt'];
+	let placeOverBlocks = ['air', 'water'];
+	let time = 0;
+	let zFactor;
+	let timeSpeed = 0.33;
+	let sunColor;
+	let moonColor;
+	let mobs = {};
+	let currentMobID = 0;
+	let chunkMobs = {};
+	let mobsList = {};
+	let passiveMobsList = ['pig', 'cow', 'sheep', 'duck'];
+  let hostileMobsList = ['zombie'];
+
+
+	//animation properties
+	let isInitializing = true;
+	let initializationWindow = 200;
+	let legSwingRange = 10;
+	let legOffsetL = 10;
+	let legOffsetR = 10;
+	let armOffsetL = 0;
+	let armOffsetR = 0;
+	let playerHeight = 55;
+	let isSwinging = false;
+	let creativeDrag = false;
+  let playerHitCoolDown = 0;
+	let bubblesImgL;
+	let bubblesImgR;
+	let currentDirection = 'right';
+	let anminalMoveSpeed = 1;
+	let HIT_COOLDOWN = 30; //~half second
+	let SHOW_TEST_GRID = false;
+	let deathAnimations = {};
+  let hostileMobMoveSpeed = 1.5;
+  let heartImg;
+  let fadeOut = 0;
+  let meatImg;
+  let meatCookedImg;
+  let fireImg;
+  let featherImg;
+  let leatherImg;
+  let woolImg;
+  let playerHitLImg;
+  let playerHitRImg;
+
+
+
+
+	function setup() {
+
+	  createCanvas(windowWidth, windowHeight);
+
+	  defineBlockTypes();
+	  defineOres();
+	  defineMobs();
+
+	  generateWorld();
+
+	  //add clouds
+	  addClouds();
+
+
+    //load  images
+	  bubblesImgL = loadImage('https://iili.io/dtIwAX.png');
+	  bubblesImgR = loadImage('https://i.ibb.co/wQhs7vD/bubblesR.png');
+    heartImg = loadImage('https://i.ibb.co/YLkr2mY/heart.png');
+    meatImg = loadImage('https://i.ibb.co/MSD05x6/output-onlinepngtools-9.png');
+    meatCookedImg = loadImage('https://i.ibb.co/NT3hq37/cooked-Meat.png');
+    fireImg = loadImage('https://iili.io/2YX1Xs.png');
+    featherImg = loadImage('https://iili.io/2aNEmB.png');
+    leatherImg = loadImage('https://iili.io/2aNwrJ.png');
+    woolImg = loadImage('https://iili.io/2aOHrb.jpg');
+    playerHitLImg = loadImage('https://i.ibb.co/Jkb8r7s/dtIwAX.png');
+    playerHitRImg = loadImage('https://iili.io/2cZmKJ.png');
+
+
+
+
+
+	  zFactor =  Math.pow((width/2),2)/(windowHeight/2);
+	  player_x = windowWidth/2;
+	  player_y = windowHeight/2 - 100;
+	  skyColor = color(102, 176, 255);
+	  time = windowWidth/2;
+	  sunColor = color(255, 252, 105);
+	  moonColor = color(207, 207, 207);
+
+	  if(gameMode == 'creative'){
+	  	addToInventory('emeraldTool', 1);
+	  }
+	}
+
+
+	//define blocks available
+	let blocks = {};
+	let blockTypes = [];
+	function defineBlockTypes(){
+		blocks['air'] = color(102, 176, 255,0);
+		blocks['grass'] = color(66, 245, 129);
+		blocks['dirt'] = color(120, 88, 23);
+		blocks['water'] = color(64, 118, 255);
+		blocks['sand'] = color(255, 231, 163);
+		blocks['stone'] = color(155, 155, 155);
+		blocks['wood'] = color(209, 187, 119);
+		blocks['leaf'] = color(23, 181, 9);
+		blockTypes = ['air', 'grass', 'dirt', 'water', 'sand', 'stone', 'wood', 'leaf'];
+	}
+
+
+	//define ore types
+	function defineOres(){
+		oreTypes['flint'] = color(0);
+		oreTypes['coal'] = color(0);
+		oreTypes['iron'] = color(235, 235, 235);
+		oreTypes['gold'] = color(255, 236, 31);
+		oreTypes['ruby'] = color(255, 31, 64);
+		oreTypes['emerald'] = color(23, 255, 154);
+	}
+
+
+	//define mob images
+	function defineMobs(){
+
+		//pig
+		mobsList['pig'] = [loadImage('https://iili.io/dt8Tsn.png'), loadImage('https://i.ibb.co/3Rp0Lcj/pigR.png'), loadImage('https://i.ibb.co/B3xdmq0/imageedit-15-4402982614.png'), loadImage('https://iili.io/dblGXp.png')];
+
+		//cow
+		mobsList['cow'] = [loadImage('https://i.ibb.co/wKXCNfN/imageedit-1-6055900521.png'), loadImage('https://iili.io/dbaATQ.png'),  loadImage('https://iili.io/296Wp1.png'), loadImage('https://i.ibb.co/y463z4Y/imageedit-1-4752170044.png')];
+
+		//duck
+		mobsList['duck'] = [loadImage('https://i.ibb.co/y5jj5ht/imageedit-7-7761943428.png'), loadImage('https://iili.io/dbaXZN.png'), loadImage('https://i.ibb.co/h9qzjK7/imageedit-19-7422114913.png'), loadImage(' https://iili.io/dblpEP.png')];
+
+		//sheep
+		mobsList['sheep'] = [loadImage('https://i.ibb.co/fN11nMv/sheep-L-2.png'), loadImage('https://iili.io/dbaN6X.png'), loadImage('https://i.ibb.co/GJyXgZ7/imageedit-23-2113847715.png'), loadImage('https://iili.io/db0H3F.png')];
+
+		//zombie
+    mobsList['zombie'] = [loadImage('https://i.ibb.co/crcgz8Y/zombie-Blue-L.png'), loadImage('https://iili.io/2xMnBs.png'), loadImage('https://iili.io/2xM7j9.png'), loadImage('https://i.ibb.co/1QVVdbg/zombie-Blue-RHit.png')];
+    mobsList['zombieMoveL'] = [ loadImage('https://i.ibb.co/zGHt186/output-onlinepngtools-16.png') , loadImage('https://i.ibb.co/cTQg1WN/output-onlinepngtools-15.png') , loadImage('https://i.ibb.co/VmffkCG/output-onlinepngtools-14.png') , loadImage('https://i.ibb.co/Z69Ltcw/output-onlinepngtools-13.png')];
+    mobsList['zombieMoveR'] = [loadImage('https://iili.io/2ajhj1.png'), loadImage('https://iili.io/2ajjZF.png'), loadImage('https://iili.io/2ajNCg.png'), loadImage('https://iili.io/2ajOGa.png')];
+
+
+
+	}
+
+	//generate flat 2d world...
+	let world = {};
+	let clouds = {};
+	function generateWorld(){
+
+
+		let x = 0;
+		let y = 0;
+		while(x*block_size < windowWidth){
+			y = 0;
+			while(y*block_size < windowHeight){
+
+				//if height > halfway... air block Math.floor((windowHeight/2)/20)
+				if(y  <  Math.floor((windowHeight/2)/20)){
+					world[x + ',' + y] = 'air';
+				}
+				else if(y  == Math.floor((windowHeight/2)/20)){
+					world[x + ',' + y] = 'grass';
+				}
+				else if(y  < Math.floor((windowHeight/2)/20) + 5){
+					world[x + ',' + y] = 'dirt';
+				}
+				else{
+					world[x + ',' + y] = 'stone';
+				}
+				y++;
+			}
+
+			x++;
+		}
+
+		//add hills
+		addHills();
+
+		//molt Dirt
+		moltDirt();
+
+		//add trees
+		addTrees();
+
+		//add water
+		addWater();
+
+		//add ore
+		addOre();
+
+		//add passive mobs
+		addPassiveMobs();
+
+		//save world in chunks
+		chunks[currentChunk] = world;
+		chunkOre[currentChunk] = ore;
+		chunkMobs[currentChunk] = mobs;
+    chunkItmes[currentChunk] = items;
+
+	}
+
+	function addHills(){
+		//randomly add hills to top layer
+		let y_increment = 1;
+		let y = Math.floor((windowHeight/2)/20)-y_increment;
+		let x = 0;
+		while(x*block_size < windowWidth){
+			if(random()>0.9){
+				world[x + ',' + y] = 'grass';
+			}
+			x++;
+		}
+	}
+
+	function moltDirt(){
+		let y_increment = 5;
+		let y = Math.floor((windowHeight/2)/20)+y_increment;
+		let x = 0;
+		while(x*block_size < windowWidth){
+			if(random()>0.7){
+				world[x + ',' + y] = 'dirt';
+			}
+			x++;
+		}
+	}
+
+	function addTrees(){
+		let y = parseInt(Math.floor((windowHeight/2)/20)-1);
+		let x = 0;
+		while(x*block_size < windowWidth){
+			if(random()>0.9 && world[(x-1) + ',' + y] != 'wood'){
+				//set tree to random height
+				let treeHeight = 4 + random()*20;
+				for(var i = 0; i < treeHeight; i++){
+					world[x + ',' + (y-i)] = 'wood';
+					//randomly add leaves
+					if(i > 3 && random()>0.5){
+						world[(x-1) + ',' + (y-i)] = 'leaf';
+						world[(x) + ',' + (y-i)] = 'leaf';
+						world[(x+1) + ',' + (y-i)] = 'leaf';
+					}
+					else if(i > 3 && random()>0.5){
+						world[(x+1) + ',' + (y-i)] = 'leaf';
+					}
+					else if(i > 3 && random()>0.5){
+						world[(x-1) + ',' + (y-i)] = 'leaf';
+					}
+				}
+			}
+			x++;
+		}
+	}
+
+
+	function addWater(){
+		let y = Math.floor((windowHeight/2)/20);
+		let x = 0;
+		while(x*block_size < windowWidth){
+			if(random()>0.93 && world[x + ',' + (y-1)] == 'air'){
+				world[x + ',' + y] = 'water';
+				let extBlocks = 1;
+				while(extBlocks < 4){
+					if(random()>0.4 && world[(x+extBlocks) + ',' + (y-1)] == 'air'){
+						world[(x+extBlocks) + ',' + y] = 'water';
+						extBlocks++;
+					}
+					else{
+						extBlocks = 5;
+					}
+				}
+			}
+			x++;
+		}
+	}
+
+	function addOre(){
+		let y = Math.floor((windowHeight/2)/block_size);
+		let x = 0;
+		let i = 0;
+		while(x*block_size < windowWidth){
+			i=0;
+			while(i<7){
+				if(random()>0.99 && world[x + ',' + (y+i)] != 'water' && world[(x) + ',' + (y-i)] != 'air'){ //add flint randomly
+					ore[x + ',' + (y+1)] = 'flint';
+				}
+				else if( i == 0 && world[(x) + ',' + y] == 'water' && random()>0.6){ //add flint under all water blocks
+					ore[x + ',' + (y+1)] = 'flint';
+				}
+				else if(i > 4 && random()>0.97){//randomly add coal
+					ore[x + ',' + (y+i)] = 'coal';
+				}
+				i++
+			}
+			while(i>=7&& i < 14){
+				if(random()>0.995){//randomly add coal
+					ore[x + ',' + (y+i)] = 'coal';
+				}
+				else if(random()>0.995){//randomly add iron
+					ore[x + ',' + (y+i)] = 'iron';
+				}
+
+				i++
+			}
+			while(i>=14 && i < 21){
+				if(random()>0.99){//randomly add coal
+					ore[x + ',' + (y+i)] = 'coal';
+				}
+				else if(random()>0.99){//randomly add iron
+					ore[x + ',' + (y+i)] = 'iron';
+				}
+				else if(random()>0.997){//randomly add gold
+					ore[x + ',' + (y+i)] = 'gold';
+				}
+				else if(random()>0.999){//randomly add ruby
+					ore[x + ',' + (y+i)] = 'ruby';
+				}
+				else if(random()>0.9995){//randomly add emerald
+					ore[x + ',' + (y+i)] = 'emerald';
+				}
+				i++
+			}
+			x++;
+		}
+	}
+
+
+	function draw() {
+
+
+
+    if(gameOver){
+      fill(0,0,0,fadeOut);
+      rect(0,0,windowWidth, windowHeight);
+
+      if(fadeOut < 100) fadeOut++;
+      else{
+        textSize(32);
+        fill(252, 32, 3);
+        text('GAME OVER', windowWidth/2 - 64, windowHeight/2 + 16)
+
+      }
+      return;
+    }
+
+	//update time
+	updateTime();
+
+
+
+
+	skyColor = getSkyColor(time);
+
+	  background(skyColor);
+
+	  if(SHOW_TEST_GRID){
+	  	stroke(0);
+	  	strokeWeight(1);
+	  }
+	  else
+	  	noStroke();
+
+	  //draw world
+	  drawWorld();
+
+
+	  //wait to draw character until word is don initializing
+	  if(!isInitializing){
+	  	//draw character
+	    drawCharacter();
+	  }
+
+
+
+	  //draw inventory hotbar...
+	  //draw 7 boxes at the bottom
+	  let topY = windowHeight-boxWidth;
+	  let leftX = (windowWidth/2)-(boxWidth/2)-(3*boxWidth);
+	  let boxNum = 0;
+	  while(boxNum < 7){
+
+	  	fill(200,200,200)
+	  	stroke(50);
+	  	strokeWeight(4);
+	  	rect(leftX, topY, boxWidth, boxWidth, 1);
+	  	noStroke();
+
+	  	//draw item in inventory
+	  	if(boxNum == selectedDragItem){
+	  		drawItemInInventory(inventory[boxNum], mouseX, mouseY);
+	  	}
+	  	else{
+	  		drawItemInInventory(inventory[boxNum], leftX, topY);
+	  	}
+
+	  	leftX += boxWidth;
+
+	  	boxNum++;
+	  }
+
+	//highlight currently selected box
+	if(currentInventorySpot < 7){
+		leftX = (windowWidth/2)-(boxWidth/2)-(3*boxWidth);
+		leftX += currentInventorySpot*boxWidth;
+		fill(200,200,200,0)
+	  	stroke(240);
+	  	strokeWeight(4);
+	  	rect(leftX, topY, boxWidth, boxWidth, 1);
+	  	noStroke();
+  	}
+
+  	//rest of invventory
+	  if(inventoryIsOpen) drawFullInventory();
+    else drawHealth();
+
+  	//remember not to float away...
+  	gravity();
+
+	//detect move
+	let px = parseInt(player_x/block_size);
+	let py = parseInt(player_y/block_size);
+	let pxL = parseInt((player_x+block_size/2)/block_size);
+	let pxR = parseInt((player_x-block_size/2)/block_size);
+	  if(keyIsDown(65) ){ //a - left
+
+	  	changeFace('left');
+
+	  	checkBounds('left');//check if player exited the chunk on the left
+
+	  	//can player move left?
+	  	if(passableBlocks.includes(world[(px-1) + ',' + py]) && passableBlocks.includes(world[(px-1) + ',' + (py+1)] ) ){
+	  		if(isInAir()) player_x -= 2;
+	  		else player_x -= 3;
+	  	}
+	  }
+	  else if(keyIsDown(68)){ //d - right
+
+	  	changeFace('right');
+
+	  	checkBounds('right');//check if player exited the chunk on the right
+
+	  	//can player move left?
+	  	if(passableBlocks.includes(world[(px+1) + ',' + py]) && passableBlocks.includes(world[(px+1) + ',' + (py+1)] ) ){
+	  		if(isInAir()) player_x += 2;
+	  		else player_x += 3;
+	  	}
+	  }
+	  if( headIsInAir() && !isInAir()  && (keyIsDown(32) || keyIsDown(87))){ //w or space - jump
+	  	player_vy = 4;
+	  }
+
+	  //detect throw... Q
+	  else if(keyIsDown(81)){
+	  	//throw currently selected item
+	  	let i = 0;
+	  	while(i < inventory[currentInventorySpot][1]){
+	  		items[nextItemID] = [inventory[currentInventorySpot][0], player_x + 3*block_size, player_y];
+	  		nextItemID++;
+	  		i++;
+	  	}
+	  	removeFromInventory(inventory[currentInventorySpot][0],inventory[currentInventorySpot][1]);
+	  }
+
+	  //detect move down thru passable blocks... s
+	  else if(keyIsDown(83) && ( moveableBlocks.includes(world[px + ',' + py]) &&  moveableBlocks.includes(world[px + ',' + (py+1)]) &&  moveableBlocks.includes(world[px + ',' + (py+2)]))){
+	  	player_y += 3;
+	  }
+
+
+
+	}
+
+
+	//key press...
+	function keyPressed() {
+
+	  // detect open inventory, E
+	  if(keyPressed && keyCode == 69){
+	  	if(inventoryIsOpen) inventoryIsOpen = false;
+	  	else inventoryIsOpen = true;
+	  }
+
+
+
+
+	}
+
+	//draw world
+	function drawWorld(){
+
+
+		//add sun
+		let sunX = time;
+		let sunY = (1/zFactor)*(Math.pow( (sunX-(windowWidth/2)),2 ));
+		fill(sunColor);
+		circle(sunX,sunY, 56);
+
+		//add moon
+		let moonX = time-windowWidth;
+		let moonY = (1/zFactor)*(Math.pow( (moonX-(windowWidth/2)),2 ));
+		fill(moonColor);
+		circle(moonX,moonY, 30);
+
+
+
+		//draw clouds
+		for(var key in clouds){
+
+			let cloudX = clouds[key][0];
+			let cloudY = clouds[key][1];
+			let cloudWidth = clouds[key][2];
+			let cloudHeight = clouds[key][3];
+			let shade = clouds[key][4];
+
+			fill(clouds[key][4]);
+			rect(clouds[key][0],clouds[key][1],clouds[key][2],clouds[key][3],20);
+
+			//move clouds
+			clouds[key][0] = clouds[key][0] + 0.2;
+
+			//remove cloud if it leaves screen
+			if(clouds[key][0] > windowWidth + 60){
+				delete clouds[key];
+			}
+
+			//randomly add clouds
+			if(Object.keys(clouds).length < 7 && random() > 0.9999 ){
+				//start clouds at random x and random y (y > 3/4 height)
+				let cloudX = -60;
+				let cloudY = ((random()*windowHeight)/6)+(windowHeight/6);
+
+				//give random size
+				let cloudWidth = random()*100;
+				let cloudHeight = (cloudWidth*(random()*2.5))/3;
+
+				//give random shade
+				let shade = random()*55 + 200;
+
+				//save cloud info
+				clouds[generatedClouds] = [cloudX,cloudY, cloudWidth, cloudHeight, shade];
+				generatedClouds++;
+			}
+
+		}
+
+
+		//add blocks
+		let blocksFalling = {};
+		for(var key in world){
+			let x = getX(key);
+			let y = getY(key);
+
+			let blockX = parseInt(x);
+			let blockY = parseInt(y);
+			let targetY = blockY + 1;
+
+
+			//detect if block should fall
+			// if(world[key] != 'air' && world[blockX + ',' + targetY] == 'air' && world[blockX-1 + ',' + blockY] == 'air' && world[blockX+1 + ',' + blockY] == 'air' && y < windowHeight-(7*block_size)){
+			// 	blocksFalling[key] = world[key];
+			// }
+			if(gravityBlocks.includes(world[key]) && (world[blockX + ',' + targetY] == 'air' || world[blockX + ',' + targetY] == 'water')){
+				blocksFalling[key] = world[key];
+			}
+			//water physics...
+			if(world[key] == 'water' && world[(blockX-1) + ',' + blockY] == 'air' && random()>0.9){
+				world[(blockX-1) + ',' + blockY] = 'water';
+			}
+			else if(world[key] == 'water' && world[(blockX+1) + ',' + blockY] == 'air' && random()>0.9){
+				world[(blockX+1) + ',' + blockY] = 'water';
+			}
+      else if(world[key] == 'water' && world[(blockX) + ',' + (blockY+1)] == 'air' && random()>0.9){
+        world[(blockX) + ',' + (blockY+1)] = 'water';
+      }
+
+
+			fill(blocks[world[key]]);
+			rect(x*block_size, y*block_size, block_size, block_size);
+
+		}
+
+		//drop blocks
+		for(var key in blocksFalling){
+		 	let x = parseInt(getX(key));
+		 	let y = parseInt(getY(key));
+		 	world[key] = 'air';
+		 	world[x + ',' + (y+1)] = blocksFalling[key];
+		}
+
+
+
+		//draw items --- drawitems renderitems
+		for(var item in items){
+			renderItem(item);
+
+			//detect if player can pick up item
+			if((distance(player_x, player_y, items[item][1], items[item][2]) <= 2*block_size || distance(player_x, player_y+playerHeight, items[item][1], items[item][2]) <= 2*block_size) && !inventoryIsFull()){
+
+				//add item to inventory
+				addToInventory(items[item][0]);
+
+				//delete item
+				delete items[item];
+			}
+		}
+
+		//draw ores
+		for(var thisOre in ore){
+			let leftX = getX(thisOre)*block_size;
+			let topY = getY(thisOre)*block_size;
+
+			fill(oreTypes[ore[thisOre]]);
+
+			if(ore[thisOre] == 'flint'){
+				rect(leftX + (block_size/4), topY + (block_size/4), 4,4);
+				rect(leftX + 3*(block_size/4), topY + (block_size/2), 3,4);
+				rect(leftX + (block_size/3), topY + 3*(block_size/4), 4,4);
+			}
+			else if(ore[thisOre] == 'coal'){
+				rect(leftX + 3*(block_size/4), topY + (block_size/4), 3,4, 3);
+				rect(leftX + (block_size/4), topY + (block_size/2), 3,2, 1);
+				rect(leftX + 2*(block_size/3), topY + 2*(block_size/3), 2,3);
+			}
+			else if(ore[thisOre] == 'iron'){
+				rect(leftX + (block_size/4), topY + (block_size/4), 3,5);
+				rect(leftX + 3*(block_size/4), topY + (block_size/2), 4,5);
+				rect(leftX + (block_size/3), topY + 3*(block_size/4), 4,3);
+			}
+			else if(ore[thisOre] == 'gold'){
+				rect(leftX + 3*(block_size/4), topY + (block_size/4), 2,3, 3);
+				rect(leftX + (block_size/4), topY + (block_size/2), 3,2, 1);
+				rect(leftX + 2*(block_size/3), topY + 2*(block_size/3), 2,2);
+			}
+			else if(ore[thisOre] == 'ruby'){
+				rect(leftX + (block_size/4), topY + (block_size/4), 2,2);
+				rect(leftX + (block_size/3), topY + 3*(block_size/4), 2,3);
+			}
+			else if(ore[thisOre] == 'emerald'){
+				rect(leftX + (block_size/3), topY + 3*(block_size/4), 2,3);
+			}
+
+
+		}
+
+
+
+		//render mobs
+		renderMobs();
+
+
+    //add hostile mobs
+    if(time > windowWidth){
+      if(random() > 0.995) addHostileMobs();
+    }
+
+	}
+
+
+	function renderMobs(){
+		for(var mob in mobs){
+
+			let mobX = parseInt(mobs[mob][2]/block_size);
+			let mobY = parseInt(mobs[mob][3]/block_size);
+
+			let mobImg;
+			let speedCoef = 1; //for movement
+
+			//get image
+			if(mobs[mob][1]==0)//load left img
+			{
+				if(mobs[mob][5] <=0 ){
+					deathAnimation(mobs[mob][2] + ((block_size*mobs[mob][7])/2), mobs[mob][3] + ((block_size*mobs[mob][7]))/2);
+					mobs[mob][5] = mobs[mob][5]-1;
+				}
+				else if(mobs[mob][6] == 0)
+					mobImg = mobsList[mobs[mob][0]][0];
+				else{ // mob is hit ... in cooldown
+					mobImg = mobsList[mobs[mob][0]][2];
+					mobs[mob][6] = mobs[mob][6] - 1;
+				}
+				speedCoef = -1;
+			}
+			else //load right
+			{
+				if(mobs[mob][5] <=0 ){
+					deathAnimation(mobs[mob][2] + ((block_size*mobs[mob][7])/2), mobs[mob][3] + ((block_size*mobs[mob][7]))/2);
+					mobs[mob][5] = mobs[mob][5]-1;
+				}
+				else if(mobs[mob][6] == 0)
+					mobImg = mobsList[mobs[mob][0]][1];
+				else{ // mob is hit ... in cooldown
+					mobImg = mobsList[mobs[mob][0]][3];
+					mobs[mob][6] = mobs[mob][6] - 1;
+				}
+			}
+
+
+
+			//move mob
+			if(passiveMobsList.includes(mobs[mob][0]) && mobs[mob][5] > 0 ) //move passive mobs
+			{
+				mobs[mob][2] = mobs[mob][2] + (speedCoef*random()*anminalMoveSpeed)
+				if(mobs[mob][2] >= windowWidth || mobs[mob][2] <= block_size) { //if on borders...
+					mobs[mob][1] = Math.abs(mobs[mob][1]-1); //turn around
+				}
+				else if(!passableBlocks.includes(world[(mobX) +',' + (mobY)]) ) //if blocked
+				{
+					mobs[mob][3] = Math.abs(mobs[mob][3]-1); //move up
+				}
+				//randomly change direction
+				else if(random() > 0.995){
+					mobs[mob][1] = Math.abs(mobs[mob][1]-1);
+				}
+
+			}
+      else if(hostileMobsList.includes(mobs[mob][0]) && mobs[mob][5] > 0){
+        //move toward player
+        if(mobs[mob][2] >= windowWidth || mobs[mob][2] <= block_size/2) { //if on borders...
+					mobs[mob][1] = Math.abs(mobs[mob][1]-1); //turn around
+				}
+				else if( !passableBlocks.includes(world[(mobX) +',' + (mobY)]) ) //if blocked
+				{
+					mobs[mob][3] = Math.abs(mobs[mob][1]-1); //move up
+				}
+        else if(world[(mobX) +',' + (mobY+2)] == 'water'){
+          	mobs[mob][3] = Math.abs(mobs[mob][3]+1); //move down
+        }
+        else if(world[(mobX) +',' + (mobY+2)] == 'air'){
+        }
+        else if(player_x > mobs[mob][2] + block_size*2 ){ //move right
+          if( passableBlocks.includes(world[(mobX+1)+','+(mobY+1)])){
+            mobs[mob][2] = mobs[mob][2] + hostileMobMoveSpeed
+            mobs[mob][1] = [1];
+          }
+
+          if(mobs[mob][0] == 'zombie'){
+            mobImg = mobsList['zombieMoveR'][parseInt(Math.floor(mobs[mob][2]%4))];
+          }
+        }
+        else if(player_x < mobs[mob][2] - block_size ){ //move left
+          if(passableBlocks.includes(world[(mobX-1)+','+(mobY+1)])){
+            mobs[mob][2] = mobs[mob][2] - hostileMobMoveSpeed
+            mobs[mob][1] = [0];
+          }
+
+          if(mobs[mob][0] == 'zombie'){
+            mobImg = mobsList['zombieMoveL'][parseInt(Math.floor(mobs[mob][2]%4))];
+          }
+        }
+        else if(  Math.pow( ( Math.pow(player_x - mobs[mob][2],2) + Math.pow(player_y - mobs[mob][3],2)  ) ,0.5)    < interactionRange*2/3 ){ //hit player
+          if(playerHitCoolDown == 0 && playerHealth > 0){
+            playerHealth -= 2;
+            playerHitCoolDown = HIT_COOLDOWN;
+          }
+        }
+
+
+        //BURN ZOMBIES!!!
+        if(time < windowWidth){
+          if(mobs[mob][0] == 'zombie'){
+            damageMob(mob, 2);
+          }
+        }
+      }
+
+
+			//check for falling
+			let yOffset = 1;
+			if(mobs[mob][0] == 'cow' || mobs[mob][0] == 'sheep' || hostileMobsList.includes(mobs[mob][0])) yOffset++;
+			if(world[mobX +',' + (mobY-1)] == 'water'){
+				mobs[mob][3] = mobs[mob][3] + 0.2;
+				//world[mobX +',' + (mobY+1)] == 'air'
+			}
+			else if(world[mobX +',' + (mobY+yOffset)] == 'air'){
+				mobs[mob][3] = mobs[mob][3] + 2;
+			}
+			else if(world[mobX +',' + (mobY)] != 'air' && world[mobX +',' + (mobY+1)] != 'water' && world[mobX +',' + (mobY+1)] != 'wood' && world[mobX +',' + (mobY+1)] != 'leaf'){
+				mobs[mob][3] = mobs[mob][3] - 0.2;
+			}
+
+
+      //add mob to screen
+      if(mobs[mob][5]>0)
+        image(mobImg, mobs[mob][2], mobs[mob][3], block_size*mobs[mob][7], block_size*mobs[mob][7]);
+
+		}
+		//delete dead guys
+		for(mob in mobs){
+
+
+
+			if(mobs[mob][5] < -15){
+        //add drop?
+        if(passiveMobsList.includes(mobs[mob][0])){
+          if(mobs[mob][0] == 'cow'){
+            items[nextItemID++] = ['meat', mobs[mob][2], mobs[mob][3]];
+            if(random() > 0.5) items[nextItemID++] = ['meat', mobs[mob][2], mobs[mob][3]];
+            items[nextItemID++] = ['leather', mobs[mob][2], mobs[mob][3]];
+          }
+          else if(mobs[mob][0] == 'sheep'){
+            items[nextItemID++] = ['meat', mobs[mob][2], mobs[mob][3]];
+            items[nextItemID++] = ['wool', mobs[mob][2], mobs[mob][3]];
+            if(random() > 0.3) items[nextItemID++] = ['meat', mobs[mob][2], mobs[mob][3]];
+          }
+          else if(mobs[mob][0] == 'pig'){
+            items[nextItemID++] = ['meat', mobs[mob][2], mobs[mob][3]];
+            if(random() > 0.5) items[nextItemID++] = ['leather', mobs[mob][2], mobs[mob][3]];
+          }
+          else if(mobs[mob][0] == 'duck'){
+            if(random() > 0.5) items[nextItemID++] = ['meat', mobs[mob][2], mobs[mob][3]];
+            items[nextItemID++] = ['feather', mobs[mob][2], mobs[mob][3]];
+          }
+        }
+        delete mobs[mob];
+      }
+
+		}
+
+
+	}
+
+	function renderItem(item){
+		let itemType = items[item][0];
+		if(itemType == 'stick'){
+			renderStick(item, items[item][1], items[item][2]);
+		}
+		else if (itemType == 'flint'){
+			renderFlint(item, items[item][1], items[item][2]);
+		}
+		else if (itemType == 'coal'){
+			renderCoal(item, items[item][1], items[item][2]);
+		}
+		else if (itemType == 'iron' || itemType == 'gold' || itemType == 'ruby' || itemType == 'emerald'){
+			renderOre(item, items[item][1], items[item][2]);
+		}
+		else if(itemType == 'wood'){
+			renderWood(item, items[item][1], items[item][2]);
+		}
+    else if(itemType == 'meat'){
+      renderMeat(item, items[item][1], items[item][2]);
+    }
+    else if(itemType == 'feather'){
+      renderFeather(item, items[item][1], items[item][2]);
+    }
+    else if(itemType == 'leather'){
+      renderLeather(item, items[item][1], items[item][2]);
+    }
+    else if(itemType == 'wool'){
+      renderWool(item, items[item][1], items[item][2]);
+    }
+		else if(blockTypes.includes(itemType)){
+			renderBlockItem(item, items[item][1], items[item][2]);
+		}
+	}
+
+	//render stick
+	function renderStick(item,x,y){
+		stroke(87, 51, 0);
+		strokeWeight(2);
+		line(x-5,y+5, x+5, y-5);
+		noStroke();
+
+		//drop if in air or leaf
+		if(world[getBlockX(x) + ',' + getBlockY(y)] == 'air' || world[getBlockX(x) + ',' + getBlockY(y)] == 'leaf'  ){
+			items[item][2] = items[item][2] + 5;
+		}
+	}
+
+  //render meat
+  function renderMeat(item, x, y){
+
+    //draw meat image
+    image(meatImg, x, y, 25, 25);
+
+    //drop if in air or leaf
+		if(world[getBlockX(x) + ',' + getBlockY(y+block_size)] == 'air' || world[getBlockX(x) + ',' + getBlockY(y)] == 'leaf'  ){
+			items[item][2] = items[item][2] + 5;
+		}
+  }
+
+  //draw feather
+  function renderFeather(item, x,y){
+    image(featherImg, x,y, 20, 20);
+    //drop if in air or leaf
+    if(world[getBlockX(x) + ',' + getBlockY(y+block_size)] == 'air' || world[getBlockX(x) + ',' + getBlockY(y)] == 'leaf'  ){
+      items[item][2] = items[item][2] + 5;
+    }
+  }
+
+  function renderLeather(item, x, y){
+    image(leatherImg, x,y, 20, 20);
+    //drop if in air or leaf
+    if(world[getBlockX(x) + ',' + getBlockY(y+block_size)] == 'air' || world[getBlockX(x) + ',' + getBlockY(y)] == 'leaf'  ){
+      items[item][2] = items[item][2] + 5;
+    }
+
+  }
+
+  function renderWool(item, x, y){
+    image(woolImg, x+5,y+5, 10, 10);
+    //drop if in air or leaf
+    if(world[getBlockX(x) + ',' + getBlockY(y+block_size)] == 'air' || world[getBlockX(x) + ',' + getBlockY(y)] == 'leaf'  ){
+      items[item][2] = items[item][2] + 5;
+    }
+
+  }
+
+	//render flint
+	function renderFlint(item,x,y){
+		fill(0);
+		rect(x + (block_size/4) - block_size/2, y + (block_size/4) - block_size/2, 4,4);
+		rect(x + 3*(block_size/4) - block_size/2, y + (block_size/2) - block_size/2, 3,4);
+		rect(x + (block_size/3) - block_size/2, y + 3*(block_size/4)- block_size/2, 4,4);
+
+		//drop if in air or leaf
+		if(world[getBlockX + ',' + getBlockY(y)] == 'air' || world[getBlockX(x) + ',' + getBlockY(y)] == 'leaf'  ){
+			items[item][2] = items[item][2] + 5;
+		}
+	}
+
+	//render coal
+	function renderCoal(item,x,y){
+		fill(0);
+		rect(x + 3*(block_size/4) - block_size/2, y + (block_size/4) - block_size/2, 3,3);
+		rect(x + (block_size/4) - block_size/2, y + (block_size/2) - block_size/2, 3,2);
+		rect(x + 1.5*(block_size/4) - block_size/2, y + 1.25*(block_size/2) - block_size/2, 2,2);
+		rect(x + (block_size/3) - block_size/2, y + 1.75*(block_size/4)- block_size/2, 2,2);
+
+		//drop if in air or leaf
+		if(world[getBlockX + ',' + getBlockY(y)] == 'air' || world[getBlockX(x) + ',' + getBlockY(y)] == 'leaf'  ){
+			items[item][2] = items[item][2] + 5;
+		}
+	}
+
+	//render other ore
+	function renderOre(item,x,y){
+		fill(oreTypes[items[item][0]]);
+		rect(x + (block_size/4) - block_size/2, y + (block_size/4) - block_size/2, 4,4);
+		rect(x + 3*(block_size/4) - block_size/2, y + (block_size/2) - block_size/2, 3,4);
+		rect(x + (block_size/3) - block_size/2, y + 3*(block_size/4)- block_size/2, 4,4);
+	}
+
+	//render wood
+	function renderWood(item,x,y){
+		fill(blocks['wood']);
+		rect((x) + (block_size/4), (y) + block_size/2, block_size/2, block_size/2, 4);
+
+		//drop if in air or leaf
+		if(world[getBlockX(x) + ',' + getBlockY(y)] == 'air' || world[getBlockX(x) + ',' + getBlockY(y)] == 'leaf'  ){
+			items[item][2] = items[item][2] + 5;
+		}
+	}
+
+	//render block
+	function renderBlockItem(item,x,y){
+		fill(blocks[items[item][0]]);
+		rect((x) + (block_size/4), (y) + block_size/2, block_size/2, block_size/2, 4);
+
+		//drop if in air or leaf
+		if(world[getBlockX(x) + ',' + getBlockY(y)] == 'air' || world[getBlockX(x) + ',' + getBlockY(y)] == 'leaf'  ){
+			items[item][2] = items[item][2] + 5;
+		}
+	}
+
+
+
+	function addClouds(){
+		//add in random number of clouds
+		let numClouds = Math.floor(random()*7);
+		generatedClouds = 0;
+
+		while(generatedClouds < numClouds){
+
+			//start clouds at random x and random y (y > 3/4 height)
+			let cloudX = random()*windowWidth;
+			let cloudY = ((random()*windowHeight)/6)+(windowHeight/6);
+
+			//give random size
+			let cloudWidth = random()*100;
+			let cloudHeight = (cloudWidth*(random()*2.5))/3;
+
+			//give random shade
+			let shade = random()*55 + 200;
+
+			//save cloud info
+			clouds[generatedClouds] = [cloudX,cloudY, cloudWidth, cloudHeight, shade];
+
+
+			generatedClouds++;
+		}
+	}
+
+	//draw character draw player drawplayer
+	function drawCharacter(){
+
+    if(playerHealth <= 0) return;
+
+		if(creativeDrag){
+			player_x = mouseX;
+			player_y = mouseY;
+		}
+
+		//add vy for jump
+		if(player_vy < 0 && !isInAir()){
+			player_vy = 0;
+		}
+		else{
+			player_y -= player_vy;
+		}
+
+		if(isInWater()){
+			player_y += 1.2;
+		}
+
+		//detect movement for leg swing
+		if((keyIsDown(65) || keyIsDown(68)) && !isInAir()){
+			//update leg offests
+			legOffsetL = (legOffsetL + 3)%16;
+			legOffsetR = (legOffsetR + 3)%16;
+		}
+
+		//move arm for swing
+		if(isSwinging){
+
+			if(armOffsetR > 0) armOffsetR -= 1;
+			else if(armOffsetL > 0) armOffsetL -= 1;
+
+
+
+			if(armOffsetR == 0 && armOffsetL == 0) isSwinging = false;
+		}
+
+		//draw tool if held
+	  	if(isTool(currentInventorySpot)){
+
+	  		if(armOffsetR > 0)
+	  			renderTool(inventory[currentInventorySpot][0], 'right');
+	  		else
+	  			renderTool(inventory[currentInventorySpot][0], 'left');
+	  	}
+
+
+
+
+	  	//bodyparts
+		fill(0);
+		//circle(player_x, player_y, 20); //head
+		stroke(48, 42, 61);
+		strokeWeight(4);
+
+		//line(player_x, player_y, player_x, player_y + 25); //body
+		line(player_x-(block_size/3), player_y+(block_size*2), (player_x-(block_size/3))-(legOffsetL/2), player_y + playerHeight); //left leg
+
+		line(player_x+(block_size/3), player_y+(block_size*2), player_x+(block_size/3)+(legOffsetR/2), player_y + playerHeight); //right leg
+
+		line(player_x, player_y + block_size, player_x-15-(armOffsetL/2), player_y + 25 - (armOffsetL/2)); //left arm
+
+		line(player_x, player_y + block_size, player_x+15+(armOffsetR/2), player_y + 25 - (armOffsetR/2)); //right arm
+		noStroke();
+
+		drawPlayerImg(player_x - block_size*1.33,player_y - (block_size/2.66));
+
+
+
+
+	}
+
+
+	//render tool character is holding
+	function renderTool(toolName, side){
+
+
+		var leftX;
+		var topY;
+		var rightX;
+		var bottomY;
+
+		if(side == 'right'){
+			leftX = player_x+13 + (armOffsetR/2);
+			topY = player_y + 27 - (armOffsetR/2);
+			rightX = player_x+13 + (armOffsetR/2) + 20;
+			bottomY = player_y + 7 - (armOffsetR/2);
+		}
+		else{
+			leftX = player_x - 13 - (armOffsetL/2);
+			topY = player_y + 27 - (armOffsetL/2);
+			rightX = player_x-13 - (armOffsetL/2) - 20;
+			bottomY = player_y + 7 - (armOffsetL/2);
+		}
+
+		//set tool color
+		let toolColor = color(0);
+		if(toolName.toLowerCase().includes('flint')) toolColor = oreTypes['flint'];
+		else if(toolName.toLowerCase().includes('iron')) toolColor = oreTypes['iron'];
+		else if(toolName.toLowerCase().includes('gold')) toolColor = oreTypes['gold'];
+		else if(toolName.toLowerCase().includes('ruby')) toolColor = oreTypes['ruby'];
+		else if(toolName.toLowerCase().includes('emerald')) toolColor = oreTypes['emerald'];
+
+		fill(toolColor);
+
+		//draw huge...
+		if(toolName.includes('huge')){
+			//stick part...
+			stroke(87, 51, 0);
+			strokeWeight(3);
+			line(leftX, topY, rightX, bottomY);
+			noStroke();
+
+			//tool head
+			rect(rightX-10, bottomY-10,20,20,5);
+		}
+		//large...
+		else if(toolName.includes('large')){
+			//stick part...
+			stroke(87, 51, 0);
+			strokeWeight(3);
+			line(leftX, topY, rightX, bottomY);
+			noStroke();
+
+			//tool head
+			rect(rightX-7, bottomY-7,14,14,3);
+		}
+		else{
+			//stick part...
+			stroke(87, 51, 0);
+			strokeWeight(3);
+			line(leftX, topY, rightX, bottomY);
+			noStroke();
+
+			//tool head
+			rect(rightX-5, bottomY-5,11,10,3);
+		}
+
+
+
+
+	}
+
+
+	//mouse pressed... swing arm
+	function mouseClicked(){
+
+
+
+		//detect swing left or right
+		if(mouseX > player_x){ //right
+			isSwinging = true;
+			armOffsetR = 15;
+		}
+		else{ //left
+			isSwinging = true;
+			armOffsetL = 15;
+		}
+
+    if(inventory[currentInventorySpot][0]=='meat') {
+      if(playerHealth < playerMaxHealth){
+        //eat
+        playerHealth+=2;
+        if(playerHealth > playerMaxHealth) playerHealth = playerMaxHealth;
+        removeFromInventory('meat', 1);
+      }
+    }
+    else if(inventory[currentInventorySpot][0]=='cookedMeat') {
+      if(playerHealth < playerMaxHealth){
+        //eat
+        playerHealth+=5;
+        if(playerHealth > playerMaxHealth) playerHealth = playerMaxHealth;
+        removeFromInventory('cookedMeat', 1);
+      }
+    }
+		//detect if block is close enough to hit
+		else if(distance(player_x,player_y, mouseX, mouseY) < interactionRange){
+			//get block clicked on
+			let x = parseInt(getBlockX(mouseX));
+			let y = parseInt(getBlockY(mouseY));
+
+
+			//detect hitting mob
+			let detectedMob = isOnMob();
+			if(detectedMob != -1){
+				hitMob(detectedMob);
+			}
+			//detect leaf hit
+			else if(world[x + ',' + y] == 'leaf'){
+				//give player a stick
+				if(random()>0.7 && !isTool(currentInventorySpot)){
+					//generate stick at mouseX, mouseY
+					items[nextItemID] = ['stick', mouseX, mouseY];
+					nextItemID++;
+				}
+				else if(isTool(currentInventorySpot)){
+					breakBlock(x,y);
+					items[nextItemID] = ['leaf', mouseX, mouseY];
+					nextItemID++;
+				}
+			}
+			else if(ore[x + ',' + y] == 'flint' && random() > 0.5){ //flint hit
+				delete ore[x + ',' + y]
+				items[nextItemID] = ['flint', mouseX, mouseY];
+				nextItemID++;
+			}
+			else if(ore[x + ',' + y] == 'coal' && random() > 0.5 && isTool(currentInventorySpot) && (inventory[currentInventorySpot][0].includes('huge') || inventory[currentInventorySpot][0].includes('large')  || !inventory[currentInventorySpot][0].includes('flint') )){ //coal hit
+				delete ore[x + ',' + y]
+				items[nextItemID] = ['coal', mouseX, mouseY];
+				nextItemID++;
+			}
+
+			else if(ore[x + ',' + y] == 'iron' && random() > 0.5 && isTool(currentInventorySpot) && (inventory[currentInventorySpot][0].includes('huge') || !inventory[currentInventorySpot][0].includes('flint') ) ){ //iron hit
+				delete ore[x + ',' + y]
+				items[nextItemID] = ['iron', mouseX, mouseY];
+				nextItemID++;
+			}
+
+			else if(ore[x + ',' + y] == 'gold' && random() > 0.75 && isTool(currentInventorySpot) && !inventory[currentInventorySpot][0].includes('flint') ){ //gold hit
+				delete ore[x + ',' + y]
+				items[nextItemID] = ['gold', mouseX, mouseY];
+				nextItemID++;
+			}
+
+			else if(ore[x + ',' + y] == 'ruby' && random() > 0.85 && isTool(currentInventorySpot) && (inventory[currentInventorySpot][0].includes('gold') || inventory[currentInventorySpot][0].includes('ruby') || inventory[currentInventorySpot][0].includes('emerald')) ){ //ruby hit
+				delete ore[x + ',' + y]
+				items[nextItemID] = ['ruby', mouseX, mouseY];
+				nextItemID++;
+			}
+
+			else if(ore[x + ',' + y] == 'emerald' && random() > 0.95 && isTool(currentInventorySpot) && (inventory[currentInventorySpot][0].includes('ruby') || inventory[currentInventorySpot][0].includes('emerald')) ){ //emerald hit
+				delete ore[x + ',' + y]
+				items[nextItemID] = ['emerald', mouseX, mouseY];
+				nextItemID++;
+			}
+
+			else if(world[x + ',' + y] == 'wood' && isTool(currentInventorySpot)){
+				if(inventory[currentInventorySpot][0]=='flintTool'){
+					//low random chance to break block
+					if(random() > 0.9){
+						//break block
+						breakBlock(x, y);
+					}
+				}
+				else if(inventory[currentInventorySpot][0]=='largeFlintTool'){
+					//low random chance to break block
+					if(random() > 0.8){
+						//break block
+						breakBlock(x, y);
+					}
+				}
+				else if(inventory[currentInventorySpot][0]=='hugeFlintTool'){
+					//low random chance to break block
+					if(random() > 0.7){
+						//break block
+						breakBlock(x, y);
+					}
+				}
+				else{
+					breakBlock(x, y);
+				}
+			}
+			else if((world[x + ',' + y] == 'grass' || world[x + ',' + y] == 'dirt') && isTool(currentInventorySpot)){
+				if(inventory[currentInventorySpot][0]=='largeFlintTool'){
+					//low random chance to break block
+					if(random() > 0.66){
+						//break block
+						breakBlock(x, y);
+					}
+				}
+				else if(inventory[currentInventorySpot][0]=='hugeFlintTool'){
+					//low random chance to break block
+					if(random() > 0.5){
+						//break block
+						breakBlock(x, y);
+					}
+				}
+				else if(!inventory[currentInventorySpot][0].includes('flint')){
+					breakBlock(x, y);
+				}
+			}
+			else if(world[x + ',' + y] == 'stone' && isTool(currentInventorySpot)){
+				if(inventory[currentInventorySpot][0]=='hugeFlintTool'){
+					//low random chance to break block
+					if(random() > 0.66){
+						//break block
+						breakBlock(x, y);
+					}
+				}
+				else if(inventory[currentInventorySpot][0].includes('iron')){
+					if(random() > 0.33){
+						//break block
+						breakBlock(x, y);
+					}
+				}
+				else if(!inventory[currentInventorySpot][0].includes('flint')){
+						//break block
+						breakBlock(x, y);
+				}
+			}
+			else if( placeOverBlocks.includes(world[x + ',' + y]) && blockTypes.includes(inventory[currentInventorySpot][0])){ //detect placing block
+				if(world[(x-1) + ',' + y] != 'air' || world[(x+1) + ',' + y] != 'air' || world[x + ',' + (y-1)] != 'air' || world[x + ',' + (y+1)] != 'air')
+				world[x + ',' + y] = inventory[currentInventorySpot][0];
+				removeFromInventory(inventory[currentInventorySpot][0], 1);
+			}
+
+
+
+
+
+		}
+
+	}
+
+
+	//mouse drag
+	function mousePressed(){
+		//detect dragging on inventory
+		let invSpot = getInventorySpotSelected();
+		if(invSpot >= 0){
+			selectedDragItem = invSpot;
+			currentInventorySpot = invSpot;
+		}
+
+		//creative drag...
+		if(gameMode == 'creative'){
+			if(distance(mouseX,mouseY, player_x, player_y) < block_size){
+				creativeDrag = true;
+			}
+		}
+	}
+
+	//mouse release
+	function mouseReleased(){
+
+		//crafting checks...
+		//move item check
+
+		//detect combination of items
+		let invSpot = getInventorySpotSelected();
+		if(invSpot >= 0){
+			if (inventory[invSpot][0] == 0){ //drag onto empty space...
+				inventory[invSpot][0] = inventory[selectedDragItem][0];
+				inventory[invSpot][1] = inventory[selectedDragItem][1];
+				inventory[selectedDragItem][0] = 0;
+				inventory[selectedDragItem][1] = 0;
+			}
+			//combinations... all must be reversable
+			//stick and flint
+			else if(inventory[selectedDragItem][0] == 'stick' && inventory[invSpot][0] == 'flint' && inventory[selectedDragItem][1] > 1){
+				//remove from inventory...
+				removeFromInventory('stick',2);
+				removeFromInventory('flint', 1);
+
+				//add flint tool to inventory
+				addToInventory('flintTool');
+			}
+			else if(inventory[selectedDragItem][0] == 'flint' && inventory[invSpot][0] == 'stick' && inventory[invSpot][1] > 1){
+				//remove from inventory...
+				removeFromInventory('stick',2);
+				removeFromInventory('flint', 1);
+				//add flint tool to inventory
+				addToInventory('flintTool');
+			}
+			//flint tool and more flint = bigger flint tool
+			else if(inventory[selectedDragItem][0] == 'flintTool' && inventory[invSpot][0] == 'flint'){
+				//remove from inventory...
+				removeFromInventory('flintTool',1);
+				removeFromInventory('flint', 1);
+
+				//add flint tool to inventory
+				addToInventory('largeFlintTool');
+			}
+			else if(inventory[selectedDragItem][0] == 'flint' && inventory[invSpot][0] == 'flintTool'){
+				//remove from inventory...
+				removeFromInventory('flintTool',1);
+				removeFromInventory('flint', 1);
+				//add flint tool to inventory
+				addToInventory('largeFlintTool');
+			}
+			//large flint tool and more flint = huge flint tool
+			else if(inventory[selectedDragItem][0] == 'largeFlintTool' && inventory[invSpot][0] == 'flint' && inventory[invSpot][1] > 1){
+				//remove from inventory...
+				removeFromInventory('largeFlintTool',1);
+				removeFromInventory('flint', 2);
+
+				//add flint tool to inventory
+				addToInventory('hugeFlintTool');
+			}
+			else if(inventory[selectedDragItem][0] == 'flint' && inventory[invSpot][0] == 'largeFlintTool' && inventory[selectedDragItem][1] > 1){
+				//remove from inventory...
+				removeFromInventory('largeFlintTool',1);
+				removeFromInventory('flint', 2);
+				//add flint tool to inventory
+				addToInventory('hugeFlintTool');
+			}
+			//check iron + coal... iron bar
+			else if(inventory[selectedDragItem][0] == 'coal' && inventory[invSpot][0] == 'iron'){
+				//remove from inventory...
+				removeFromInventory('coal',1);
+				removeFromInventory('iron', 1);
+				//add flint tool to inventory
+				addToInventory('iron-bar');
+			}
+			else if(inventory[selectedDragItem][0] == 'iron' && inventory[invSpot][0] == 'coal'){
+				//remove from inventory...
+				removeFromInventory('coal',1);
+				removeFromInventory('iron', 1);
+				//add flint tool to inventory
+				addToInventory('iron-bar');
+			}
+			//check gold + coal... gold bar
+			else if(inventory[selectedDragItem][0] == 'coal' && inventory[invSpot][0] == 'gold'){
+				//remove from inventory...
+				removeFromInventory('coal',1);
+				removeFromInventory('gold', 1);
+				//add flint tool to inventory
+				addToInventory('gold-bar');
+			}
+			else if(inventory[selectedDragItem][0] == 'iron' && inventory[invSpot][0] == 'coal'){
+				//remove from inventory...
+				removeFromInventory('coal',1);
+				removeFromInventory('gold', 1);
+				//add flint tool to inventory
+				addToInventory('gold-bar');
+			}
+			//iron tools...
+			else if(inventory[selectedDragItem][0] == 'iron-bar' && inventory[invSpot][0] == 'wood' && inventory[invSpot][1] > 1 ){
+				//remove from inventory...
+				removeFromInventory('iron-bar',1);
+				removeFromInventory('wood', 2);
+				//add flint tool to inventory
+				addToInventory('ironTool');
+			}
+			else if(inventory[selectedDragItem][0] == 'wood' && inventory[invSpot][0] == 'iron-bar' && inventory[selectedDragItem][1] > 1 ){
+				//remove from inventory...
+				removeFromInventory('iron-bar',1);
+				removeFromInventory('wood', 2);
+				//add flint tool to inventory
+				addToInventory('ironTool');
+			}
+			//large iron tools
+			else if(inventory[selectedDragItem][0] == 'iron-bar' && inventory[invSpot][0] == 'ironTool' ){
+				//remove from inventory...
+				removeFromInventory('iron-bar',1);
+				removeFromInventory('ironTool', 1);
+				//add flint tool to inventory
+				addToInventory('largeIronTool');
+			}
+			else if(inventory[selectedDragItem][0] == 'ironTool' && inventory[invSpot][0] == 'iron-bar'  ){
+				//remove from inventory...
+				removeFromInventory('iron-bar',1);
+				removeFromInventory('ironTool', 1);
+				//add flint tool to inventory
+				addToInventory('largeIronTool');
+			}
+			//huge iron tools
+			else if(inventory[selectedDragItem][0] == 'iron-bar' && inventory[invSpot][0] == 'largeIronTool' && inventory[selectedDragItem][1] > 1 ){
+				//remove from inventory...
+				removeFromInventory('iron-bar',2);
+				removeFromInventory('largeIronTool', 1);
+				//add flint tool to inventory
+				addToInventory('hugeIronTool');
+			}
+			else if(inventory[selectedDragItem][0] == 'largeIronTool' && inventory[invSpot][0] == 'iron-bar' && inventory[invSpot][1] > 1 ){
+				//remove from inventory...
+				removeFromInventory('iron-bar',2);
+				removeFromInventory('largeIronTool', 1);
+				//add flint tool to inventory
+				addToInventory('hugeIronTool');
+			}
+			//gold tools...
+			else if(inventory[selectedDragItem][0] == 'gold-bar' && inventory[invSpot][0] == 'wood' && inventory[invSpot][1] > 1 ){
+				//remove from inventory...
+				removeFromInventory('gold-bar',1);
+				removeFromInventory('wood', 2);
+				//add flint tool to inventory
+				addToInventory('goldTool');
+			}
+			else if(inventory[selectedDragItem][0] == 'wood' && inventory[invSpot][0] == 'gold-bar' && inventory[selectedDragItem][1] > 1 ){
+				//remove from inventory...
+				removeFromInventory('gold-bar',1);
+				removeFromInventory('wood', 2);
+				//add flint tool to inventory
+				addToInventory('goldTool');
+			}
+			//large gold tools
+			else if(inventory[selectedDragItem][0] == 'gold-bar' && inventory[invSpot][0] == 'goldTool' ){
+				//remove from inventory...
+				removeFromInventory('gold-bar',1);
+				removeFromInventory('goldTool', 1);
+				//add flint tool to inventory
+				addToInventory('largeGoldTool');
+			}
+			else if(inventory[selectedDragItem][0] == 'goldTool' && inventory[invSpot][0] == 'gold-bar'  ){
+				//remove from inventory...
+				removeFromInventory('gold-bar',1);
+				removeFromInventory('goldTool', 1);
+				//add flint tool to inventory
+				addToInventory('largeGoldTool');
+			}
+			//huge gold tools
+			else if(inventory[selectedDragItem][0] == 'gold-bar' && inventory[invSpot][0] == 'largeGoldTool' && inventory[selectedDragItem][1] > 1 ){
+				//remove from inventory...
+				removeFromInventory('gold-bar',2);
+				removeFromInventory('largeGoldTool', 1);
+				//add flint tool to inventory
+				addToInventory('hugeGoldTool');
+			}
+			else if(inventory[selectedDragItem][0] == 'largeGoldTool' && inventory[invSpot][0] == 'gold-bar' && inventory[invSpot][1] > 1 ){
+				//remove from inventory...
+				removeFromInventory('gold-bar',2);
+				removeFromInventory('largeGoldTool', 1);
+				//add flint tool to inventory
+				addToInventory('hugeGoldTool');
+			}
+			//ruby tools...
+			else if(inventory[selectedDragItem][0] == 'ruby' && inventory[invSpot][0] == 'wood' && inventory[invSpot][1] > 1 ){
+				//remove from inventory...
+				removeFromInventory('ruby',1);
+				removeFromInventory('wood', 2);
+				//add flint tool to inventory
+				addToInventory('rubyTool');
+			}
+			else if(inventory[selectedDragItem][0] == 'wood' && inventory[invSpot][0] == 'ruby' && inventory[selectedDragItem][1] > 1 ){
+				//remove from inventory...
+				removeFromInventory('ruby',1);
+				removeFromInventory('wood', 2);
+				//add flint tool to inventory
+				addToInventory('rubyTool');
+			}
+			//emerald tools...
+			else if(inventory[selectedDragItem][0] == 'emerald' && inventory[invSpot][0] == 'wood' && inventory[invSpot][1] > 1 ){
+				//remove from inventory...
+				removeFromInventory('emerald',1);
+				removeFromInventory('stick', 2);
+				//add flint tool to inventory
+				addToInventory('emeraldTool');
+			}
+			else if(inventory[selectedDragItem][0] == 'wood' && inventory[invSpot][0] == 'emerald' && inventory[selectedDragItem][1] > 1 ){
+				//remove from inventory...
+				removeFromInventory('emerald',1);
+				removeFromInventory('wood', 2);
+				//add flint tool to inventory
+				addToInventory('emeraldTool');
+			}
+      else if((inventory[selectedDragItem][0] == 'flint' && inventory[invSpot][0] == 'iron-bar')|| (inventory[selectedDragItem][0] == 'iron-bar' && inventory[invSpot][0] == 'flint')){
+        //flint and steel make fire!
+        addToInventory('fire');
+        if(random() > 0.3) removeFromInventory('flint', 1);
+        if(random() > 0.93) removeFromInventory('iron-bar', 1);
+      }
+      else if((inventory[selectedDragItem][0] == 'meat' && inventory[invSpot][0] == 'fire')|| (inventory[selectedDragItem][0] == 'fire' && inventory[invSpot][0] == 'meat')){
+        //flint and steel make fire!
+        addToInventory('cookedMeat');
+        removeFromInventory('fire', 1);
+        removeFromInventory('meat', 1);
+      }
+
+
+		}
+
+
+		//creative drag...
+		else if(creativeDrag){
+			creativeDrag = false;
+		}
+
+
+
+
+		selectedDragItem = -1;
+
+	}
+
+	//get x from key
+	function getX(key){
+		return key.substring(0, key.indexOf(','));
+	}
+	//get y from key
+	function getY(key){
+		return key.substring(key.indexOf(',')+1);
+	}
+
+	//get block x
+	function getBlockX(x){
+		return parseInt(Math.floor(x/block_size));
+	}
+	//get block y
+	function getBlockY(y){
+		return parseInt(Math.floor(y/block_size));
+	}
+
+	//detect if player is standing on ground or air
+	function isInAir(){
+		let x = parseInt(Math.floor(player_x/block_size));
+		let y = parseInt(Math.floor((player_y+playerHeight)/block_size));
+		return world[x + ',' + y] == 'air';
+	}
+
+	//detect head in air
+	function headIsInAir(){
+		let x = parseInt(Math.floor(player_x/block_size));
+		let y = parseInt(Math.floor((player_y)/block_size));
+		return passableBlocks.includes(world[x + ',' + y]);
+	}
+
+	//detect in water
+	function isInWater(){
+		let x = parseInt(Math.floor(player_x/block_size));
+		let y = parseInt(Math.floor((player_y+playerHeight)/block_size));
+		return world[x + ',' + y] == 'water';
+	}
+
+
+	//gravity
+	function gravity(){
+		player_vy -= 0.34;
+
+
+ 	}
+
+ 	//get distance
+ 	function distance(x1,y1,x2,y2){
+ 		return Math.pow( ( Math.pow((x1-x2),2) + Math.pow((y1-y2), 2) ) , 0.5);
+ 	}
+
+ 	//check inventory status
+ 	function inventoryIsFull(){
+ 		for(var item in inventory){
+ 			if(item[0] == 0) return false;
+ 		}
+ 		return true;
+ 	}
+
+ 	//add item to inventory
+ 	function addToInventory(item_in){
+ 		//check if player has same item
+ 		var hasItem = false;
+ 		for(var item in inventory){
+ 			if(inventory[item][0] == item_in){
+ 				inventory[item][1] = inventory[item][1] + 1;  //add to item count
+ 				hasItem = true;
+ 				return;
+ 			}
+ 		}
+ 		if(!hasItem){
+ 			for(var item in inventory){
+ 				if(inventory[item][0] == 0){
+ 					inventory[item][0] = item_in; //set item name
+ 					inventory[item][1] = 1; //set count to 1
+ 					return;
+ 				}
+ 			}
+ 		}
+
+ 	}
+
+ 	//remove item(s) From Inventory
+ 	function removeFromInventory(item_in, quantity){
+ 		for(var item in inventory){
+ 			if(inventory[item][0] == item_in){
+ 				inventory[item][1] = inventory[item][1] - quantity;  //subtract from item count
+ 				if(inventory[item][1] <= 0){ //delete item if quantity is 0
+ 					inventory[item][0] = 0;
+ 					inventory[item][1] = 0;
+ 				}
+ 				return;
+ 			}
+ 		}
+ 	}
+
+ 	//draw item in inventory
+ 	function drawItemInInventory(item, leftX, topY){
+
+
+
+ 		if(item[0] == 'stick'){
+ 			stroke(87, 51, 0);
+			strokeWeight(3);
+			line(leftX + (boxWidth/4),topY+(boxWidth/4),leftX + 3*(boxWidth/4),topY+3*(boxWidth/4));
+ 		}
+
+    else if(item[0] == 'meat'){
+      image(meatImg, leftX + (boxWidth/6), topY + (boxWidth/6), boxWidth*(2/3), boxWidth*(2/3))
+    }
+
+    else if(item[0] == 'cookedMeat'){
+      image(meatCookedImg, leftX + (boxWidth/6), topY + (boxWidth/6), boxWidth*(2/3), boxWidth*(2/3))
+    }
+
+    else if(item[0] == 'feather'){
+      image(featherImg, leftX + (boxWidth/6), topY + (boxWidth/6), boxWidth*(2/3), boxWidth*(2/3))
+    }
+
+    else if(item[0] == 'leather'){
+      image(leatherImg, leftX + (boxWidth/6), topY + (boxWidth/6), boxWidth*(2/3), boxWidth*(2/3))
+    }
+
+    else if(item[0] == 'wool'){
+      image(woolImg, leftX + (boxWidth/3), topY + (boxWidth/3), boxWidth*(1/3), boxWidth*(1/3))
+    }
+
+    else if(item[0] == 'fire'){
+      image(fireImg, leftX + (boxWidth/6), topY + (boxWidth/6), boxWidth*(2/3), boxWidth*(2/3))
+    }
+
+ 		else if(item[0] == 'flint'){
+ 			let x = leftX + boxWidth/2;
+ 			let y = topY + boxWidth/2;
+ 			fill(0);
+			rect(x + (boxWidth/4) - boxWidth/2, y + (boxWidth/4) - boxWidth/2, 6,6);
+			rect(x + 3*(boxWidth/4) - boxWidth/2, y + (boxWidth/2) - boxWidth/2, 4,6);
+			rect(x + (boxWidth/3) - boxWidth/2, y + 3*(boxWidth/4)- boxWidth/2, 6,6);
+ 		}
+
+ 		else if(item[0] == 'coal'){
+ 			let x = leftX + boxWidth/2;
+ 			let y = topY + boxWidth/2;
+ 			fill(0);
+			rect(x + 3*(boxWidth/4) - boxWidth/2, y + (boxWidth/4) - boxWidth/2, 6,6);
+			rect(x + (boxWidth/4) - boxWidth/2, y + (boxWidth/2) - boxWidth/2, 6,4);
+			rect(x + 1.5*(boxWidth/4) - boxWidth/2, y + 1.25*(boxWidth/2) - boxWidth/2, 4,5);
+			rect(x + (boxWidth/3) - boxWidth/2, y + 1.75*(boxWidth/4)- boxWidth/2, 6,5);
+ 		}
+
+ 		else if(item[0] in oreTypes){
+ 			let x = leftX + boxWidth/2;
+ 			let y = topY + boxWidth/2;
+ 			fill(oreTypes[item[0]]);
+			rect(x + 3*(boxWidth/4) - boxWidth/2, y + (boxWidth/4) - boxWidth/2, 6,5);
+			rect(x + (boxWidth/4) - boxWidth/2, y + (boxWidth/2) - boxWidth/2, 3,2);
+			rect(x + 1.5*(boxWidth/4) - boxWidth/2, y + 1.25*(boxWidth/2) - boxWidth/2, 4,5);
+			rect(x + (boxWidth/3) - boxWidth/2, y + 1.75*(boxWidth/4)- boxWidth/2, 5,6);
+ 		}
+
+ 		//tools
+ 		else if(item[0].toString().includes('Tool')){
+
+ 			let toolName = item[0].toString();
+			//set tool color
+			let toolColor = color(0);
+			if(toolName.toLowerCase().includes('flint')) toolColor = oreTypes['flint'];
+			else if(toolName.toLowerCase().includes('iron')) toolColor = oreTypes['iron'];
+			else if(toolName.toLowerCase().includes('gold')) toolColor = oreTypes['gold'];
+			else if(toolName.toLowerCase().includes('ruby')) toolColor = oreTypes['ruby'];
+			else if(toolName.toLowerCase().includes('emerald')) toolColor = oreTypes['emerald'];
+
+			fill(toolColor);
+
+			if(item[0].includes('huge')){
+				stroke(87, 51, 0);
+				strokeWeight(3);
+				line(leftX + (boxWidth/2),topY+(boxWidth/3),leftX + (boxWidth/2),topY+3*(boxWidth/4));
+				noStroke();
+				rect(leftX + (boxWidth/4), topY + (boxWidth/4), boxWidth/2, boxWidth/3, 7);
+			}
+			else if(item[0].includes('large')){
+				stroke(87, 51, 0);
+				strokeWeight(3);
+				line(leftX + (boxWidth/2),topY+(boxWidth/3),leftX + (boxWidth/2),topY+3*(boxWidth/4));
+				noStroke();
+				let toolHeadHeight = (boxWidth/2)-(boxWidth/4);
+				rect(leftX + (boxWidth/4), topY + (boxWidth/4), boxWidth/2, toolHeadHeight, 4);
+			}
+			else{
+				stroke(87, 51, 0);
+				strokeWeight(3);
+				line(leftX + (boxWidth/2),topY+(boxWidth/3),leftX + (boxWidth/2),topY+3*(boxWidth/4));
+				noStroke();
+				let toolHeadHeight = (boxWidth/3)-(boxWidth/4);
+				rect(leftX + (boxWidth/3), topY + (boxWidth/4), boxWidth/3, toolHeadHeight, 4);
+			}
+ 		}
+
+
+ 		else if(item[0] == 'wood'){
+ 			fill(blocks['wood']);
+			rect(leftX + (boxWidth/3), topY + (boxWidth/3), boxWidth/3, boxWidth/3, 2);
+ 		}
+
+ 		else if(blockTypes.includes(item[0])){
+ 			fill(blocks[item[0]]);
+			rect(leftX + (boxWidth/3), topY + (boxWidth/3), boxWidth/3, boxWidth/3, 2);
+ 		}
+
+ 		else if(item[0] == 'iron-bar'){
+ 			stroke(50);
+ 			strokeWeight(1);
+ 			fill(235, 235, 235);
+			rect(leftX + (boxWidth/4), topY + (boxWidth/3), boxWidth/2, boxWidth/3, 1);
+			noStroke();
+ 		}
+
+ 		else if(item[0] == 'gold-bar'){
+ 			stroke(50);
+ 			strokeWeight(1);
+ 			fill(oreTypes['gold']);
+			rect(leftX + (boxWidth/4), topY + (boxWidth/3), boxWidth/2, boxWidth/3, 1);
+			noStroke();
+ 		}
+
+ 		textSize(13);
+		stroke(255);
+		fill(255);
+		strokeWeight(1);
+		if(item[1] > 1)
+			text(item[1], leftX + 2*(boxWidth/3), topY + 4*(boxWidth/5) );
+		noStroke();
+ 	}
+
+
+ 	//return if mouse is over inventory
+ 	function mouseOnInventory(){
+ 		let yFactor = 1;
+ 		if(inventoryIsOpen) yFactor = 4;
+ 		let topY = windowHeight-(boxWidth*yFactor);
+	  	let leftX = (windowWidth/2)-(boxWidth/2)-(3*boxWidth);
+ 		if(mouseX >= leftX && mouseX <= leftX+(7*boxWidth) && mouseY >= topY){
+			return true;
+ 		}
+ 		return false;
+ 	}
+
+ 	//return inventory spot mouse is over
+ 	function getInventorySpotSelected(){
+ 		let yFactor = 1;
+ 		if(inventoryIsOpen) yFactor = 4;
+ 		let topY = windowHeight-(boxWidth*yFactor);
+	  	let leftX = (windowWidth/2)-(boxWidth/2)-(3*boxWidth);
+
+	  	if(!mouseOnInventory()){
+	  		return -1;
+	  	}
+	  	else if(inventoryIsOpen){
+	  		let col = parseInt(Math.floor((mouseX - leftX)/boxWidth));
+	  		let row = -1*(parseInt(Math.floor(((mouseY-topY)/boxWidth))) - 3);
+  			if(row == 1) row = 3;
+  			else if(row == 3) row = 1;
+		  	return (row*7) + col;
+	  	}
+	  	else{
+		  	return parseInt(Math.floor((mouseX - leftX)/boxWidth))
+	  	}
+ 	}
+
+ 	//return if player is using tool
+ 	function isTool(spot){
+ 		if(inventory[spot][0] == 0) return false;
+ 		else if(inventory[spot][0].includes('Tool')) return true;
+ 		return false;
+ 	}
+
+ 	//break block in world
+ 	function breakBlock(x,y){
+
+ 		//store blocktype
+ 		let blockType = world[x + ',' + y];
+
+ 		//if wood, drop rest of tree
+ 		if(blockType == 'wood' ){
+
+ 			//drop mined block
+ 			//delete world[x + ',' + y];
+	 		world[x + ',' + y] = 'air';
+
+	 		//drop block as item
+	 		items[nextItemID] = [blockType, x*block_size, y*block_size];
+	 		nextItemID++;
+
+	 		//delete leaves
+			if(world[x-1 + ',' + y] == 'leaf'){
+				//delete world[x-1 + ',' + (y+i)];
+				world[x-1 + ',' + (y+i)] = 'air';
+			}
+			if(world[x+1 + ',' + y] == 'leaf'){
+				//delete world[x-1 + ',' + (y+i)];
+				world[x+1 + ',' + (y+i)] = 'air';
+			}
+
+ 			//drop all wood below...
+ 			let i = 1;
+ 			let onWood = true;
+ 			while(onWood && false){
+ 				if(world[x + ',' + (y+i)] == 'wood' || world[x + ',' + (y+i)] == 'leaf'){
+ 					delete world[x + ',' + (y+i)];
+	 				world[x + ',' + (y+i)] = 'air';
+
+	 				//drop block as item
+			 		items[nextItemID] = [blockType, x*block_size, y*block_size];
+			 		nextItemID++;
+	 				//delete leaves
+	 				if(world[x-1 + ',' + (y+i)] == 'leaf'){
+	 					//delete world[x-1 + ',' + (y+i)];
+	 					world[x-1 + ',' + (y+i)] = 'air';
+	 				}
+	 				if(world[x+1 + ',' + (y+i)] == 'leaf'){
+						//delete world[x-1 + ',' + (y+i)];
+						world[x+1 + ',' + (y+i)] = 'air';
+					}
+ 				}
+ 				else{
+ 					onWood = false;
+ 				}
+ 				i++;
+ 			}
+
+ 			//drop all wood above
+ 			i = -1;
+ 			onWood = true;
+ 			while(onWood){
+ 				if(world[x + ',' + (y+i)] == 'wood' || world[x + ',' + (y+i)] == 'leaf'){
+ 					//delete world[x + ',' + (y+i)];
+	 				world[x + ',' + (y+i)] = 'air';
+
+	 				//drop block as item
+			 		items[nextItemID] = [blockType, x*block_size, y*block_size];
+			 		nextItemID++;
+
+	 				//delete leaves
+	 				if(world[x-1 + ',' + (y+i)] == 'leaf'){
+	 					//delete world[x-1 + ',' + (y+i)];
+	 					world[x-1 + ',' + (y+i)] = 'air';
+	 				}
+	 				if(world[x+1 + ',' + (y+i)] == 'leaf'){
+						//delete world[x-1 + ',' + (y+i)];
+						world[x+1 + ',' + (y+i)] = 'air';
+					}
+ 				}
+ 				else{
+ 					onWood = false;
+ 				}
+ 				i--;
+ 			}
+
+ 		}
+ 		else{
+ 			//set brocken block to air
+	 		delete world[x + ',' + y];
+	 		world[x + ',' + y] = 'air';
+	 		//drop block as item
+	 		items[nextItemID] = [blockType, x*block_size, y*block_size];
+	 		nextItemID++;
+ 		}
+ 	}
+
+
+  function drawHealth(){
+
+    if(playerHealth <= 0){
+      //explode player
+      if(playerHitCoolDown > 0){
+        deathAnimation(player_x, player_y);
+        playerHitCoolDown--;
+      }
+
+      if(playerHitCoolDown <= 0) gameOver = true;
+    }
+
+    let topY = windowHeight-(boxWidth*1.5);
+	  let leftX = (windowWidth/2)-(boxWidth/2)-(3*boxWidth)+7;
+
+    let heartsToDraw = playerHealth;
+    let heartsDrawn = 0;
+    let spacing = (boxWidth*7)/playerMaxHealth;
+
+    while(heartsDrawn < heartsToDraw){
+      image(heartImg, leftX, topY, 15, 15);
+      leftX += spacing;
+      heartsDrawn++;
+    }
+
+    //make hit cooldown calculations
+    if(playerHitCoolDown > 0) playerHitCoolDown --;
+
+  }
+
+ 	//draw full inventory, 28 spots
+ 	function drawFullInventory(){
+
+ 		let topY = windowHeight-(boxWidth*4);
+ 		let invRow = 1;
+ 		while(invRow < 4){
+
+			let leftX = (windowWidth/2)-(boxWidth/2)-(3*boxWidth);
+			let boxNum = invRow*7;
+			while(boxNum < (invRow*7)+7){
+
+
+			  	fill(200,200,200)
+			  	stroke(50);
+			  	strokeWeight(4);
+			  	rect(leftX, topY, boxWidth, boxWidth, 1);
+			  	noStroke();
+
+			  	//draw item in inventory
+			  	if(boxNum == selectedDragItem){
+			  		drawItemInInventory(inventory[boxNum], mouseX-boxWidth/2, mouseY+boxWidth/2);
+			  	}
+			  	else{
+			  		drawItemInInventory(inventory[boxNum], leftX, topY);
+			  	}
+
+			  	leftX += boxWidth;
+
+				boxNum++;
+			}
+			invRow++;
+			topY+=boxWidth;
+		}
+ 	}
+
+
+ 	//get sky color depending on time
+ 	function getSkyColor(time){
+ 		//day...
+ 		if(time <= windowWidth){
+
+ 			let defualtColor = color(102, 176, 255);
+ 			let defualtColorRed = 102;
+ 			let defualtColorGreen = 176;
+ 			let defualtColorBlue = 255;
+
+ 			//in first or last quarter of day?
+ 			if(time < windowWidth/4){
+ 				//reduce color
+ 				// let red = defualtColorRed - (defualtColorRed*(1/()))
+ 				let distFactor = ((windowWidth/4) - time)/(windowWidth/4);
+
+ 				let red = defualtColorRed - (defualtColorRed*distFactor)/2;
+ 				let green = defualtColorGreen  - (defualtColorGreen*distFactor);
+ 				let blue = defualtColorBlue  - (defualtColorBlue*distFactor)/2;
+ 				return color(red,green,blue);
+ 			}
+ 			else if(time > 3*windowWidth/4){
+ 				//reduce color
+ 				let distFactor = (time - (3*windowWidth/4))/(windowWidth/4);
+
+ 				let red = defualtColorRed - (defualtColorRed*distFactor)/2;
+ 				let green = defualtColorGreen  - (defualtColorGreen*distFactor);
+ 				let blue = defualtColorBlue  - (defualtColorBlue*distFactor)/2;
+ 				return color(red,green,blue);
+ 			}
+ 			else{
+ 				return defualtColor;
+ 			}
+ 		}
+ 		//night
+ 		else if(time > windowWidth){
+ 			//draw night...
+ 			let defualtColor = color(45, 0, 70);
+ 			let defualtColorRed = 50;
+ 			let defualtColorGreen = 0;
+ 			let defualtColorBlue = 130;
+
+			//calculate night opacity...
+			let dist = Math.abs(time - (1.5*windowWidth));
+			let opacity = dist/(windowWidth/2);
+
+ 			return color(opacity*defualtColorRed, opacity*defualtColorGreen, opacity*defualtColorBlue)
+ 		}
+
+ 	}
+
+ 	//keep time at range 0 to 2 x width...
+ 	//day is from 0 to width
+ 	//nigth is from width to 2 x width
+ 	function updateTime(){
+ 		if(time >= windowWidth*2) {
+ 			time = 0;
+ 			return;
+ 		}
+ 		time += timeSpeed;
+
+ 		//change init status
+ 		if(isInitializing && time > initializationWindow){
+ 			isInitializing = false;
+ 		}
+ 	}
+
+
+ 	//check if the player exited the current chunk
+ 	//takes boudry exited on
+ 	//if player exited, move to new chunk apporpriatly
+ 	function checkBounds(direction){
+ 		if(direction == 'left'){
+ 			if(player_x <= block_size){
+ 				loadChunk('left');
+ 			}
+ 		}
+ 		else if(direction == 'right'){
+ 			if(player_x >= windowWidth - (block_size)){
+ 				loadChunk('right');
+ 			}
+ 		}
+ 	}
+
+
+ 	//load new chunk when player exits...
+ 	function loadChunk(direction){
+
+
+ 		//update current chunk and player position
+ 		if(direction == 'left'){
+ 			currentChunk--;
+ 			player_x = windowWidth - (block_size/2);
+ 		}
+ 		else if(direction == 'right'){
+ 			currentChunk++;
+ 			player_x = block_size/2;
+ 		}
+
+ 		if(currentChunk in chunks){
+ 			world = chunks[currentChunk];
+ 			ore = chunkOre[currentChunk];
+ 			mobs = chunkMobs[currentChunk];
+      items = chunkItmes[currentChunk];
+ 		}
+ 		else{
+ 			//regenerate world
+ 			world = {};
+ 			ore = {};
+ 			mobs = {};
+      items = {}
+ 			generateWorld();
+ 		}
+
+ 	}
+
+ 	function drawPlayerImg(x,y){
+ 		if(currentDirection == 'right'){
+      if(playerHitCoolDown > 0) image(playerHitRImg, x, y, 56, 56);
+ 			else image(bubblesImgR, x, y, 56, 56);
+ 		}
+ 		else{
+      if(playerHitCoolDown > 0) image(playerHitLImg, x, y, 56, 56);
+ 			else image(bubblesImgL, x-2, y, 56, 56);
+ 		}
+
+ 	}
+
+
+ 	//change players current direction
+ 	function changeFace(direction){
+ 		currentDirection = direction;
+ 	}
+
+
+
+ 	//add passive mobs (pigs, cows, ect)
+ 	function addPassiveMobs(){
+		let y = Math.floor((windowHeight/2)/20); //set y to grass level
+		let x = 0;
+
+		//pass over world and add randomly add mobs
+		while((x*block_size) < windowWidth){
+
+			if(random()>0.9){
+
+				let mobSeed = random()*5;
+				let mobType = '';
+				let mobScale = 1.5
+				let mobHealth = 5;
+				let mobHitCooldown = 0;
+				if(mobSeed < 1) mobType = 'pig';
+				else if(mobSeed < 2){
+					mobType = 'cow';
+					mobScale = 2.5;
+					mobHealth = 8;
+				}
+				else if(mobSeed < 3){
+					mobType = 'duck';
+					mobHealth = 2;
+				}
+				else if(mobSeed < 4){
+					mobType = 'sheep';
+					mobScale = 2;
+
+				}
+				else return;
+
+				let direction = random();
+				if(direction > 0.5) direction = 1;
+				else direction = 0;
+
+				mobs[currentMobID] = [mobType, direction, x*block_size, y*block_size - (block_size*mobScale/1.5),  mobScale, mobHealth, mobHitCooldown, mobScale]; //pig facing left at x,y, with scale 1.5, health 5, not being hit, mobscale
+				currentMobID++;
+			}
+
+			x++;
+		}
+
+ 	}
+
+  //add hostile mobs
+ 	function addHostileMobs(){
+		let y = Math.floor((windowHeight/2)/block_size); //set y to grass level
+		let x = windowWidth - block_size*2;
+
+    if(random()>0.5) {
+      x = block_size;
+    }
+
+
+		if(true){ //night time?
+
+			let mobSeed = random()*10;
+			let mobType = '';
+			let mobScale = 2.5;
+			let mobHealth = 15;
+			let mobHitCooldown = 0;
+			if(mobSeed < 10) mobType = 'zombie';
+			else return;
+
+			let direction = random();
+			if(direction > 0.5) direction = 1;
+			else direction = 0;
+
+			mobs[currentMobID] = [mobType, direction, x, y*block_size - (block_size*mobScale),  mobScale, mobHealth, mobHitCooldown, mobScale]; //zombie facing left at x,y, with scale 1.5, health 5, not being hit, mobscale
+			currentMobID++;
+		}
+
+ 	}
+
+
+ 	//detect if a mob is on mouse
+ 	function isOnMob(){
+
+ 		let worldX = parseInt(mouseX/block_size);
+ 		let worldY = parseInt(mouseY/block_size);
+
+
+ 		for(mob in mobs){
+
+
+ 			if(distance(mobs[mob][2], mobs[mob][3], mouseX, mouseY) < block_size*mobs[mob][7])
+ 			{
+ 				return mob;
+ 			}
+
+
+ 		}
+ 		return -1;
+ 	}
+
+
+  //damage given mob
+  function damageMob(mob, damage){
+    if(mobs[mob][6] == 0) //is the mob "cooled down" from last hit?
+    {
+      mobs[mob][5] = mobs[mob][5] - damage;
+      //add hit cooldown to mob
+			mobs[mob][6] = HIT_COOLDOWN;
+
+			//maintain health 0 for death animation
+			if(mobs[mob][5] <= 0){
+			 	mobs[mob][5] = 0;
+			}
+    }
+  }
+
+
+ 	//hit mob at x y
+ 	function hitMob(mob){
+
+ 		let x = parseInt(mouseX/block_size);
+ 		let y = parseInt(mouseY/block_size);
+
+
+		if(mobs[mob][6] == 0) //is the mob "cooled down" from last hit?
+		{
+			//detect tool used and calculate damage inflicted
+			let baseDamage = 1;
+			let toolDamage = 0;
+
+			let tool = inventory[currentInventorySpot][0];
+
+      if(tool == 0){} //open hand?
+			else if(tool.includes('flint')) toolDamage++;
+			else if(tool.includes('iron')) toolDamage += 2.5;
+			else if(tool.includes('gold')) toolDamage += 3;
+			else if(tool.includes('ruby')) toolDamage += 5;
+			else if(tool.includes('emerald')) toolDamage += 7;
+
+      if(tool == 0){} //open hand?
+			else if(tool.includes('large')) toolDamage++;
+			else if(tool.includes('huge')) toolDamage +=2;
+
+			//subtract health
+			mobs[mob][5] = mobs[mob][5] - baseDamage - toolDamage;
+
+			//add hit cooldown to mob
+			mobs[mob][6] = HIT_COOLDOWN;
+
+			//maintain health 0 for death animation
+			if(mobs[mob][5] <= 0){
+			 	mobs[mob][5] = 0;
+			}
+		}
+
+ 	}
+
+
+ 	//death animation
+ 	function deathAnimation(x,y){
+ 		let key = x +',' +y;
+ 		if(key in deathAnimations){
+
+
+ 			for(particle in deathAnimations[key]){
+
+ 				if(deathAnimations[key].length == 0) {
+ 					delete deathAnimations[key];
+ 					break;
+ 				}
+
+ 				//draw...
+ 				fill(deathAnimations[key][particle].color[0], deathAnimations[key][particle].color[1], deathAnimations[key][particle].color[2], deathAnimations[key][particle].color[3]);
+ 				// fill(255,0,0)
+ 				circle(deathAnimations[key][particle].x, deathAnimations[key][particle].y, deathAnimations[key][particle].radius);
+ 				//move...
+ 				deathAnimations[key][particle].x = deathAnimations[key][particle].x + deathAnimations[key][particle].vx;
+ 				deathAnimations[key][particle].y = deathAnimations[key][particle].y + deathAnimations[key][particle].vy;
+
+ 				//gravity
+ 				deathAnimations[key][particle].vy += 1;
+
+ 				//alpha
+ 				deathAnimations[key][particle].color[3] = deathAnimations[key][particle].color[3] - (deathAnimations[key][particle].color[3]/10)
+
+ 				if(deathAnimations[key][particle].color[3] < 1){
+ 					delete deathAnimations[key][particle];
+ 				}
+ 			}
+ 		}
+ 		else{
+
+ 			let i = 0;
+ 			let particles = {};
+ 			while(i < 40){
+ 				//set x,y, vx, vy
+ 				// let px = (x-(block_size/4)) + (random() * (block_size/2))
+ 				// let py = (y-(block_size/4)) + (random() * (block_size/2))
+ 				let px = x;
+ 				let py = y;
+ 				let velocityCoefX;
+ 				if(random()>=0.5)
+ 					velocityCoefX = -1;
+ 				else velocityCoefX = 1;
+ 				let velocityCoefY;
+ 				if(random()>=0.5)
+ 					velocityCoefY = -1;
+ 				else velocityCoefY = 1;
+ 				let pvx = (random()*7) * velocityCoefX;
+ 				let pvy = (random()*7) * velocityCoefY;
+ 				let pCol = [(138 + random()*117),(21 + random()*24),(21 + random()*24), 255]
+ 				let pRadius = random()*5;
+ 				let newParticle = {x:px, y:py, vx:pvx, vy:pvy, color:pCol, radius:pRadius};
+ 				particles[i] = newParticle;
+ 				i++;
+ 			}
+ 			deathAnimations[key] = particles;
+ 		}
+ 	}
+
+
+
+
+
+</script>
