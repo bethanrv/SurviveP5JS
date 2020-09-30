@@ -5,7 +5,9 @@
 	<!-- include p5js -->
 	<script src="https://cdn.jsdelivr.net/npm/p5@1.1.9/lib/p5.js"></script>
 </head>
-<body>
+<body style="background-color:black;">
+  <input id="commandInput" type="text" style="font-family:'Courier New'; font-size:1.5em; display:none;"/>
+  <button id="sendCommandBtn" style="background-color:black; color:white; border:none; display:none;"> > </button>
 </body>
 </html>
 <script type="text/javascript">
@@ -35,10 +37,10 @@
 	let selectedDragItem = -1;
 	let currentInventorySpot = 0;
 	let inventoryIsOpen = false;
-	let passableBlocks = [ 'air', 'grass', 'wood', 'leaf', "water"];
-	let moveableBlocks = [ 'air', 'wood', 'leaf', "water"];
+	let passableBlocks = [ 'air', 'grass', 'wood', 'leaf', "water", 'fire'];
+	let moveableBlocks = [ 'air', 'wood', 'leaf', "water", 'fire'];
 	let gravityBlocks = ['grass', 'dirt'];
-	let placeOverBlocks = ['air', 'water'];
+	let placeOverBlocks = ['air', 'water', 'fire'];
 	let time = 0;
 	let zFactor;
 	let timeSpeed = 0.33;
@@ -52,9 +54,13 @@
   let hostileMobsList = ['zombie'];
 
 
+
 	//animation properties
 	let isInitializing = true;
 	let initializationWindow = 200;
+  let chatIsOpen = false;
+  let commandArea = document.getElementById('commandInput');
+  let commandSender = document.getElementById('sendCommandBtn');
 	let legSwingRange = 10;
 	let legOffsetL = 10;
 	let legOffsetR = 10;
@@ -82,7 +88,31 @@
   let woolImg;
   let playerHitLImg;
   let playerHitRImg;
+  let FIRE_TICK = 0.95;
+  let dryadBossImg;
+  let dryadEmerganceCap = 10;
+  let dryadEmerganceFactor = 0;
+  let dryadSummoned = false;
+  let dryadX;
+  let dryadY;
+  let dryadDirection = 'right';
+  let largeBossSize = block_size*6;
+  let dryadGroundAttackImgs = {};
 
+
+
+
+  //send command...
+  function sendCommand(){
+    if(commandArea.value == 'heal'){
+      playerHealth = playerMaxHealth;
+    }
+    else if(commandArea.value == 'spawn dryad'){
+      dryadSummoned = true;
+      dryadX = windowWidth/4;
+      dryadY = windowWidth/3;
+    }
+  }
 
 
 
@@ -100,6 +130,7 @@
 	  addClouds();
 
 
+
     //load  images
 	  bubblesImgL = loadImage('https://iili.io/dtIwAX.png');
 	  bubblesImgR = loadImage('https://i.ibb.co/wQhs7vD/bubblesR.png');
@@ -112,6 +143,7 @@
     woolImg = loadImage('https://iili.io/2aOHrb.jpg');
     playerHitLImg = loadImage('https://i.ibb.co/Jkb8r7s/dtIwAX.png');
     playerHitRImg = loadImage('https://iili.io/2cZmKJ.png');
+    loadDryadImages();
 
 
 
@@ -129,6 +161,18 @@
 	  	addToInventory('emeraldTool', 1);
 	  }
 	}
+
+  function loadDryadImages(){
+    dryadBossImg = [loadImage('https://i.ibb.co/94sjMsM/dryadL.png'),loadImage('https://i.ibb.co/pPHZQ4z/dryadR.png')];
+    dryadGroundAttackImgs['small-left'] = loadImage('https://i.ibb.co/b5Wm4Dq/dryad-Ground-Atk-Sm-L.png');
+    dryadGroundAttackImgs['small-right'] = loadImage('https://i.ibb.co/H2fTMcZ/dryad-Ground-Atk-Sm-R.png');
+    dryadGroundAttackImgs['medium-left'] = loadImage('https://i.ibb.co/T2wjnYn/dryad-Ground-Atk-Md-L.png');
+    dryadGroundAttackImgs['medium-right'] = loadImage('https://i.ibb.co/zGtLtTd/dryad-Ground-Atk-Md-R.png');
+    dryadGroundAttackImgs['large-left'] = loadImage('https://i.ibb.co/QQMKmCw/dryad-Ground-Atk-Lg-L.png');
+    dryadGroundAttackImgs['large-right'] = loadImage('https://i.ibb.co/b1Dvtrd/dryad-Ground-Atk-Lg-R.png');
+    dryadGroundAttackImgs['xl-left'] = loadImage('https://i.ibb.co/3kgKZ7G/dryad-Ground-Atk-Xl-L.png');
+    dryadGroundAttackImgs['xl-right'] = loadImage('https://i.ibb.co/tMfR3Vf/dryad-Ground-Atk-Xl-R.png');
+  }
 
 
 	//define blocks available
@@ -387,7 +431,6 @@
 
 
 
-
 	skyColor = getSkyColor(time);
 
 	  background(skyColor);
@@ -510,6 +553,9 @@
 	}
 
 
+
+
+
 	//key press...
 	function keyPressed() {
 
@@ -518,6 +564,25 @@
 	  	if(inventoryIsOpen) inventoryIsOpen = false;
 	  	else inventoryIsOpen = true;
 	  }
+
+
+    if(keyPressed && keyCode == 13){
+      sendCommand();
+    }
+
+    //detect commands... t to type
+    if(keyPressed && keyCode == 84){
+      if(chatIsOpen) {
+        chatIsOpen = false;
+        commandArea.style.display = 'none';
+        commandSender.style.display = 'none';
+      }
+	  	else {
+        chatIsOpen = true;
+        commandArea.style.display = 'block';
+        commandSender.style.display = 'block';
+      }
+    }
 
 
 
@@ -595,13 +660,10 @@
 
 
 			//detect if block should fall
-			// if(world[key] != 'air' && world[blockX + ',' + targetY] == 'air' && world[blockX-1 + ',' + blockY] == 'air' && world[blockX+1 + ',' + blockY] == 'air' && y < windowHeight-(7*block_size)){
-			// 	blocksFalling[key] = world[key];
-			// }
 			if(gravityBlocks.includes(world[key]) && (world[blockX + ',' + targetY] == 'air' || world[blockX + ',' + targetY] == 'water')){
 				blocksFalling[key] = world[key];
 			}
-			//water physics...
+			//water and fire physics...
 			if(world[key] == 'water' && world[(blockX-1) + ',' + blockY] == 'air' && random()>0.9){
 				world[(blockX-1) + ',' + blockY] = 'water';
 			}
@@ -611,9 +673,43 @@
       else if(world[key] == 'water' && world[(blockX) + ',' + (blockY+1)] == 'air' && random()>0.9){
         world[(blockX) + ',' + (blockY+1)] = 'water';
       }
+      else if(world[key] == 'fire'){ //check for spread and possibly go out
+        if(world[(blockX) + ',' + (blockY+1)] == 'wood' || world[(blockX) + ',' + (blockY+1)] == 'leaf'){
+          if(random() > FIRE_TICK){
+            world[(blockX) + ',' + (blockY+1)] = 'fire';
+            alertDryad((blockX) + ',' + (blockY+1));
+          }
+        }
+        else if(world[(blockX) + ',' + (blockY-1)] == 'wood' || world[(blockX) + ',' + (blockY-1)] == 'leaf'){
+          if(random() > FIRE_TICK){
+            world[(blockX) + ',' + (blockY-1)] = 'fire';
+            alertDryad((blockX) + ',' + (blockY-1));
+          }
+        }
+        else if(world[(blockX+1) + ',' + (blockY)] == 'wood' || world[(blockX+1) + ',' + (blockY)] == 'leaf'){
+          if(random() > FIRE_TICK){
+            world[(blockX+1) + ',' + (blockY)] = 'fire';
+            alertDryad((blockX+1) + ',' + (blockY));
+          }
+        }
+        else if(world[(blockX-1) + ',' + (blockY)] == 'wood' || world[(blockX-1) + ',' + (blockY)] == 'leaf'){
+          if(random() > FIRE_TICK){
+            world[(blockX-1) + ',' + (blockY)] = 'fire';
+            alertDryad((blockX-1) + ',' + (blockY));
+          }
+        }
+
+        //check if fire goes out...
+        if(random() > 0.995){
+          world[key] = 'air';
+        }
+      }
 
 
-			fill(blocks[world[key]]);
+
+      //finally, draw the blocks
+      if(world[key]=='fire') fill(color(252, parseInt(random()*252),3));
+      else fill(blocks[world[key]]);
 			rect(x*block_size, y*block_size, block_size, block_size);
 
 		}
@@ -683,8 +779,12 @@
 
 
 
-		//render mobs
+		//render mobs drawmobs
 		renderMobs();
+
+
+    //render boss draw bosses
+    renderBoss();
 
 
     //add hostile mobs
@@ -692,7 +792,59 @@
       if(random() > 0.995) addHostileMobs();
     }
 
+
+
 	}
+
+  //alert dryad that the world is burning!
+  function alertDryad(key){
+    //add to dryad emergance factor until summon
+    dryadEmerganceFactor += random();
+
+    if(dryadEmerganceFactor >= dryadEmerganceCap && !dryadSummoned){
+      dryadEmerganceFactor = 0;
+      dryadSummoned = true;
+      dryadX = parseInt(key.substring(0, key.indexOf(',')))*block_size;
+      dryadY = parseInt(key.substring(key.indexOf(',')+1))*block_size;
+    }
+  }
+
+
+  function renderBoss(){
+    if(dryadSummoned){
+      image(dryadBossImg[0], dryadX, dryadY, largeBossSize);
+
+      //gravity...
+      let positionX = parseInt(dryadX/block_size);
+      let positionY = parseInt(dryadY/block_size) + 8; //minus 6 to get block boss is standing on
+      if(passableBlocks.includes(world[positionX + ',' + positionY])){
+        dryadY += 1;
+      }
+      else{ //move toward player
+        if(player_x > (dryadX + largeBossSize)){ //move right
+          dryadX += 1;
+          dryadDirection = 'right';
+          image(dryadBossImg[1], dryadX, dryadY, largeBossSize);
+        }
+        else if(player_x < dryadX){ //move left
+          dryadX -= 1;
+          image(dryadBossImg[0], dryadX, dryadY, largeBossSize);
+          dryadDirection = 'left';
+        }
+        else{
+          if(dryadDirection == 'right'){
+            image(dryadBossImg[1], dryadX, dryadY, largeBossSize);
+          }
+          else{
+            image(dryadBossImg[0], dryadX, dryadY, largeBossSize);
+          }
+        }
+      }
+
+
+
+    }
+  }
 
 
 	function renderMobs(){
@@ -759,7 +911,7 @@
 				}
 				else if( !passableBlocks.includes(world[(mobX) +',' + (mobY)]) ) //if blocked
 				{
-					mobs[mob][3] = Math.abs(mobs[mob][1]-1); //move up
+					mobs[mob][3] = Math.abs(mobs[mob][3]-1); //move up
 				}
         else if(world[(mobX) +',' + (mobY+2)] == 'water'){
           	mobs[mob][3] = Math.abs(mobs[mob][3]+1); //move down
@@ -816,6 +968,12 @@
 			else if(world[mobX +',' + (mobY)] != 'air' && world[mobX +',' + (mobY+1)] != 'water' && world[mobX +',' + (mobY+1)] != 'wood' && world[mobX +',' + (mobY+1)] != 'leaf'){
 				mobs[mob][3] = mobs[mob][3] - 0.2;
 			}
+
+      //check for fire damage
+      if(world[mobX +',' + (mobY)] == 'fire' || world[mobX +',' + (mobY-1)] == 'fire' || world[mobX +',' + (mobY+1)] == 'fire'){
+        mobs[mob][1] = Math.abs(mobs[mob][1]-1); //change direction
+        damageMob(mob, 1);
+      }
 
 
       //add mob to screen
@@ -1039,6 +1197,7 @@
 			player_y = mouseY;
 		}
 
+    //fx for air fire and water
 		//add vy for jump
 		if(player_vy < 0 && !isInAir()){
 			player_vy = 0;
@@ -1050,6 +1209,13 @@
 		if(isInWater()){
 			player_y += 1.2;
 		}
+
+    if(isInFire()){
+      if(playerHitCoolDown == 0){
+        playerHealth -= 1;
+        playerHitCoolDown = HIT_COOLDOWN/2;
+      }
+    }
 
 		//detect movement for leg swing
 		if((keyIsDown(65) || keyIsDown(68)) && !isInAir()){
@@ -1232,6 +1398,10 @@
 					items[nextItemID] = ['leaf', mouseX, mouseY];
 					nextItemID++;
 				}
+        else if(inventory[currentInventorySpot][0] == 'fire'){ //detect setting fire
+          world[x + ',' + y] = 'fire';
+          removeFromInventory('fire',1);
+        }
 			}
 			else if(ore[x + ',' + y] == 'flint' && random() > 0.5){ //flint hit
 				delete ore[x + ',' + y]
@@ -1268,8 +1438,12 @@
 				nextItemID++;
 			}
 
-			else if(world[x + ',' + y] == 'wood' && isTool(currentInventorySpot)){
-				if(inventory[currentInventorySpot][0]=='flintTool'){
+			else if(world[x + ',' + y] == 'wood'){
+        if(inventory[currentInventorySpot][0] == 'fire'){ //detect setting fire
+          world[x + ',' + y] = 'fire';
+          removeFromInventory('fire', 1);
+        }
+				else if(inventory[currentInventorySpot][0]=='flintTool'){
 					//low random chance to break block
 					if(random() > 0.9){
 						//break block
@@ -1645,6 +1819,26 @@
 		let y = parseInt(Math.floor((player_y+playerHeight)/block_size));
 		return world[x + ',' + y] == 'water';
 	}
+
+  //detect in fire
+  function isInFire(){
+    let x = parseInt(Math.floor(player_x/block_size));
+		let y = parseInt(Math.floor((player_y+playerHeight)/block_size));
+    if(world[x + ',' + y] == 'fire') return true;
+
+    y -= 1;
+    if(world[x + ',' + y] == 'fire') return true;
+
+    y -= 1;
+    if(world[x + ',' + y] == 'fire') return true;
+
+    y -= 1;
+    if(world[x + ',' + y] == 'fire') return true;
+
+
+
+		return false;
+  }
 
 
 	//gravity
